@@ -20,7 +20,17 @@
 *                                                                            *
 *****************************************************************************/
 
-
+/**@file KinectCapture.cpp
+ * Basic capture functionality for Kinect
+ *
+ * Captures RGB and ALIGNED depth images from Kinect
+ *
+ */
+/**
+ * This is a brief description
+ *
+ * This one is a longer description
+ */
 
 
 //---------------------------------------------------------------------------
@@ -30,18 +40,13 @@
 #include <XnLog.h>
 #include <XnCppWrapper.h>
 #include <XnFPSCalculator.h>
-//#include <conio.h>
-//#include <cv.h>
-//#include <highgui.h>
+#include <opencv2/core/core.hpp>
+#include <opencv2/highgui/highgui.hpp>
+#include <opencv2/calib3d/calib3d.hpp>
+#include <opencv2/opencv.hpp>
 
-//---------------------------------------------------------------------------
-// Defines
-//---------------------------------------------------------------------------
 #define SAMPLE_XML_PATH "./SamplesConfig.xml"
 
-//---------------------------------------------------------------------------
-// Macros
-//---------------------------------------------------------------------------
 #define CHECK_RC(rc, what)											\
 	if (rc != XN_STATUS_OK)											\
 	{																\
@@ -49,116 +54,84 @@
 		return rc;													\
 	}
 
-//---------------------------------------------------------------------------
-// Code
-//---------------------------------------------------------------------------
 
 using namespace xn;
-//using namespace cv;
+using namespace cv;
 
-#define BUFFER_SIZE 600
-#define EVERY_NTH_FRAME 2
+#define FRAME_SIZE_DEPTH 614400	//2*640*480
+#define FRAME_SIZE_RGB	921600 	//3*640*480
+
 char header[]="P6 640 480 255";
-XnDepthPixel depthBuffer[BUFFER_SIZE][640*480];
-XnUInt8 rgbBuffer[BUFFER_SIZE][640*480*3];
-int timeStamp= 0;
-int chunkCount = 0 ;
+char depthPath[1024];
+char rgbPath[1024];
+int alignImages = 0;
 
-typedef struct XnPoint6D
+int writetofile(const XnDepthPixel* depthData, const XnUInt8* rgbData, int frameID)
 {
-	XnPoint3D loc;
-	XnUInt8 texture[3];
-}XnPoint6D;
+	char filename[1024];
 
-XnPoint6D pointsIn3D[640*480];
+	sprintf(filename,"%s/%04d.dep",depthPath,frameID);
+	FILE * dfp = fopen(filename,"wb");
+	if(dfp==NULL)
+		return -1;
+	fwrite(depthData,FRAME_SIZE_DEPTH,1,dfp);
+	fclose(dfp);
 
-char buffer[240];
+	sprintf(filename,"%s/%04d.ppm",rgbPath,frameID);
+	FILE * rfp = fopen(filename,"wb");
+	if(rfp==NULL)
+			return -1;
+	fprintf(rfp,"%s\n",header);
+	fwrite(rgbData,FRAME_SIZE_RGB,1,rfp);
+	fclose(rfp);
 
-void toRealWorld(DepthGenerator &depth, const XnDepthPixel *pDepthMap, const XnUInt8 *pImageMap)
-{
-	for(int i=0;i<480;i++){
-		for(int j=0;j<640;j++){
-			XnPoint3D in = {j,i,pDepthMap[i*640+j]};
-			depth.ConvertProjectiveToRealWorld(1,&in,&pointsIn3D[i*640+j].loc);
-			pointsIn3D[i*640+j].texture[0]=pImageMap[3*(i*640+j)];
-			pointsIn3D[i*640+j].texture[1]=pImageMap[3*(i*640+j)+1];
-			pointsIn3D[i*640+j].texture[2]=pImageMap[3*(i*640+j)+2];
-		}
-	}
+	return 0;
+
 }
 
-void dumpData(int howMany = BUFFER_SIZE)
+void usage(char* argv0)
 {
-	/*
-	char filename[256];
-	sprintf(filename,"rgbchunk%04d.raw",chunkCount);
-
-	FILE *rgbchunk = fopen(filename,"wb");
-	fwrite(rgbBuffer,howMany*640*480*3,1,rgbchunk);
-	fclose(rgbchunk);
-
-	sprintf(filename,"depchunk%04d.raw",chunkCount);
-	FILE *depchunk = fopen(filename,"wb");
-	fwrite(depthBuffer,640*480*howMany*2,1,depchunk);
-	fclose(rgbchunk);
-
-	chunkCount++;
-	*/
+	printf("%s -o outdir [./capture/] -a \n\toutdir : Specifies the directory in which to capture\n\t -a : if given aligns the images\n",argv0);
 }
 
-void generateFiles()
+int parseArgs(int argc, char **argv)
 {
-	char filename[256];
-	for (int i=0; i<chunkCount;i++)
+	for(int i=1;i<argc;i++)
 	{
-		sprintf(filename,"rgbchunk%04d.raw",i);
-		FILE * rgbChunk = fopen(filename,"rb");
-		if(rgbChunk==NULL)
+		if(strcmp(argv[i],"-o")==0)
 		{
-			printf("Could not open %s -- ABORTING\n",filename);
-			exit(-1);
+			strcpy(depthPath,argv[i+1]);
+			strcpy(rgbPath,argv[i+1]);
+			i++;
 		}
-		int cnt = fread(rgbBuffer,640*480*3,BUFFER_SIZE,rgbChunk);
-		for(int j = 0 ; j < cnt ; j++ )
+		else if(strcmp(argv[i],"-a")==0)
 		{
-			sprintf(filename,"rgb%06d.ppm",(BUFFER_SIZE*i + j));
-			FILE *image = fopen(filename,"wb");
-			fprintf(image,"%s\n",header);
-			fwrite(rgbBuffer[j],640*480*3,1,image);
-			fclose(image);
+			alignImages = 1;
 		}
-
-		sprintf(filename,"depchunk%04d.raw",i);
-		FILE * depChunk = fopen(filename,"rb");
-		cnt = fread(depthBuffer,640*480*2,BUFFER_SIZE,depChunk);
-		for(int j = 0 ; j < cnt ; j++ )
+		else
 		{
-			sprintf(filename,"dep%06d.raw",(BUFFER_SIZE*i + j));
-			FILE *depth = fopen(filename,"wb");
-			fwrite(depthBuffer[j],640*480*sizeof(XnUInt16),1,depth);
-			fclose(depth);
+			printf("Unknown parameter: %s\n",argv[i]);
+			return -1;
 		}
-
 	}
+	return 0;
 }
 
-void writeply(const char *name)
+int main(int argc,char *argv[])
 {
-	FILE * fp= fopen(name,"wb");
-	fprintf(fp,"ply\nformat binary_little_endian 1.0\ncomment : created from Kinect depth image\nelement vertex 307200\nproperty float x\nproperty float y\nproperty float z\nproperty uchar red\nproperty uchar green\nproperty uchar blue\nend_header\n");
-	fwrite(pointsIn3D,sizeof(XnPoint6D)*640*480,1,fp);
-	//fwrite(data,640*480*3,1,fp);
-	fclose(fp);
-}
-
-int main()
-{
+	strcpy(depthPath,"./capture/");
+	strcpy(rgbPath,"./capture/");
+	if(parseArgs(argc,argv)<0)
+	{
+		usage(argv[0]);
+		return -1;
+	}
 	XnStatus nRetVal = XN_STATUS_OK;
-
 	Context context;
 	EnumerationErrors errors;
-
 	nRetVal = context.InitFromXmlFile(SAMPLE_XML_PATH, &errors);
+
+
 
 	if (nRetVal == XN_STATUS_NO_NODE_PRESENT)
 	{
@@ -172,6 +145,15 @@ int main()
 		printf("Open failed: %s\n", xnGetStatusString(nRetVal));
 		return (nRetVal);
 	}
+
+	cvNamedWindow("RGB");
+	cvNamedWindow("Depth");
+
+	static IplImage *img = 0;
+	if (!img) img = cvCreateImageHeader(cvSize(640,480), 8, 3);
+
+	static IplImage *dep = 0;
+	if(!dep) dep = cvCreateImageHeader(cvSize(640,480),16,1);
 
 	DepthGenerator depth;
 	nRetVal = context.FindExistingNode(XN_NODE_TYPE_DEPTH, depth);
@@ -197,8 +179,15 @@ int main()
 		depth.GetFrameSyncCap().FrameSyncWith(image);
 	}
 
-	nRetVal = depth.GetAlternativeViewPointCap().SetViewPoint(image);
-	CHECK_RC(nRetVal," Set viewpoint");
+	if(alignImages)
+	{
+		nRetVal = depth.GetAlternativeViewPointCap().SetViewPoint(image);
+		CHECK_RC(nRetVal," Set viewpoint");
+	}
+
+	CvFileStorage * fs = cvOpenFileStorage("calibration_rgb.yaml",0,CV_STORAGE_READ);
+	CvMat * cameraMatrix = (CvMat *)cvReadByName(fs,0,"camera_matrix");
+	CvMat * distortionCoeffs = (CvMat *)cvReadByName(fs,0,"distortion_coefficients");
 
 	printf("Capture Started ...\n");
 	while (!xnOSWasKeyboardHit())
@@ -215,61 +204,37 @@ int main()
 		depth.GetMetaData(depthMD);
 		image.GetMetaData(imageMD);
 
-		int frameID = depthMD.FrameID();
+		cvSetData(img,(unsigned char *)imageMD.Data(), 640*3);
+		cvSetData(dep,(unsigned char *)depthMD.Data(), 640*2);
+		IplImage* depcvtd = cvCreateImage(cvSize(640,480),8,1);
+		cvConvertScale(dep,depcvtd, -255.0/10000.0,255);
 
-		toRealWorld(depth,depthMD.Data(),imageMD.Data());
+		IplImage * undistortedImg =cvCloneImage(img);
 
-		sprintf(buffer,"%04d.ply",depthMD.FrameID());
+		cvUndistort2(img,undistortedImg,cameraMatrix,distortionCoeffs);
 
-		writeply(buffer);
+		imshow("RGB",undistortedImg);
+		imshow("Depth",depcvtd);
+		cvWaitKey(5);
 
-		/*
-		if( ( frameID % EVERY_NTH_FRAME) == 0 )
-		{
-			timeStamp++;
-			const XnDepthPixel* pDepthMap = depthMD.Data();
-			memcpy(depthBuffer[timeStamp%BUFFER_SIZE],(unsigned char *)pDepthMap,depthMD.DataSize());
-
-			const XnUInt8* pImageMap = imageMD.Data();
-			memcpy(rgbBuffer[timeStamp%BUFFER_SIZE],pImageMap,imageMD.DataSize());
+		if(writetofile(depthMD.Data(),imageMD.Data(),depthMD.FrameID())<0){
+			printf("Could not write to file .. make sure the directory[%s] is present\n",rgbPath);
+			return -1;
 		}
-		//if( timeStamp>0 &&  (timeStamp % BUFFER_SIZE) == 0 )
-			//dumpData();
-		/*
-		Mat depthMat(depthMD.YRes(),depthMD.XRes(),CV_16UC1,(XnUInt16*) pDepthMap);
-		Mat imageMat(imageMD.YRes(),imageMD.XRes(),CV_8UC3,(XnUInt8*) pImageMap);
-		Mat depthNorm, imageNorm;
 
-		imageNorm = imageMat.clone();
-
-		//Assumed the that maximum range is 10000 mm (10 m)
-		depthMat.convertTo(depthNorm,CV_8UC1,255.0/10000);
-		cvtColor(imageMat,imageNorm,CV_RGB2BGR);
-		// NOTE : Nearest is White .. farthest is black
-		imshow("RGB_Image",imageNorm);
-		imshow("Depth",depthNorm);
-		waitKey(15);
-
-
-		sprintf(buffer,"rgb_%04d.bmp",depthMD.FrameID());
-		//imwrite(buffer,img2);
-
-		sprintf(buffer,"dep_%04d.bmp",depthMD.FrameID());
-		//imwrite(buffer,dep2);
-
-		show++;
-		*/
-
-		//printf("D Frame %d Middle point is: %u. FPS: %f [x y z] (%f %f %f)\n", frameID, depthMD(depthMD.XRes() / 2, depthMD.YRes() / 2), xnFPSCalc(&xnFPS),pnt.X,pnt.Y,pnt.Z);
-		//printf("I Frame %d Middle point is: 0. FPS: %f\n", imageMD.FrameID(), xnFPSCalc(&xnFPS));
+		//fprintf(stderr,"FPS: %f\n", xnFPSCalc(&xnFPS));
 	}
 
-	dumpData(timeStamp%BUFFER_SIZE);
-	//cvDestroyAllWindows();
+	cvDestroyAllWindows();
 	context.Shutdown();
 	printf("Capture Completed\n");
-	printf("Generating files ... ");
-	generateFiles();
 	printf("Done");
+
+
+
+
+
+	cvDestroyAllWindows();
 	return 0;
 }
+
