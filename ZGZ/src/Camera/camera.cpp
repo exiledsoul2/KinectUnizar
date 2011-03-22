@@ -51,6 +51,8 @@ void camera::detectPoints(KeyPointsVector& k){
 
 void camera::extractPatches(KeyPointsVector K, std::vector<Patch>& patchList){
 	std::vector<KeyPoint>::iterator iter;
+	if(patchList.size()>0) patchList.clear();
+
 	for(iter = K.begin();iter != K.end(); iter++)
 	{
 		int x = iter->pt.x;
@@ -63,12 +65,12 @@ void camera::extractPatches(KeyPointsVector K, std::vector<Patch>& patchList){
 		if((xOrigin+PATCH_WIDTH)>IMAGE_COLS ||(yOrigin+PATCH_HEIGHT)>IMAGE_ROWS) continue;
 
 		// Check if we have valid depth for the current point
-		float depth = _currentDepth.at<unsigned short int>(y ,x);
+		float depth = _currentDepth.at<unsigned short int>(y,x);
 		if( depth < 1 ) continue;
 		//std::cout<<"["<<iter->pt.y<<","<<iter->pt.x<<"]"<<std::endl;
 		//if all went well . create the patch and use it.
 		Patch patch;
-		patch.uvd = Point3d(y,x,depth);
+		patch.uvd = Point3d(x,y,depth/1000);
 		patch.xyz = toWorldXYZ(patch.uvd);
 		patch.texture = Mat(_currentImage, cvRect(xOrigin,yOrigin,PATCH_WIDTH,PATCH_HEIGHT));
 		patchList.insert(patchList.end(),patch);

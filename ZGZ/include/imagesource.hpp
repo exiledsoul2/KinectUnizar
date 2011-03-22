@@ -56,7 +56,7 @@ public:
 		_currentImagePath.assign(ss.str());
 		if(_ext == std::string("dep")){
 			std::ifstream dep; dep.open(_currentImagePath.c_str(),ios::binary);
-			uint16_t buffer[648*480];
+			uint16_t buffer[640*480];
 			dep.read((char*)buffer,640*480*2);
 			M = Mat(Size(640,480),CV_16U,buffer).clone();
 			dep.close();

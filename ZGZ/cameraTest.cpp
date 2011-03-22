@@ -47,12 +47,16 @@ int main()
 
 	imsrc.getNextImage(K.currentImage());
 	depth.getNextImage(K.currentDepth());
-	K.detectAndExtractPatches(kpnts1,patchList1);
+	K.detectPoints(kpnts1);
 
 	while(!imsrc.done()){
 
-	//K.showPatchesOnImage(kpnts1,"Patches1");
-	//K.showKeyPoints(kpnts1,"KeyPoints1");
+	patchList1.clear();
+	K.extractPatches(kpnts1,patchList1);
+	std::cerr<<"Current number of patches : "<<patchList1.size()<<std::endl;
+	K.showPatchesOnImage(kpnts1,"Patches1");
+	K.showKeyPoints(kpnts1,"KeyPoints1");
+	imshow("DEPTH",K.currentDepth()>0);
 
 	tracker.predict();
 	tracker.constructH(patchList1,tracker.Xkp1().x.block<3,1>(0,0),fu,fv);
@@ -60,23 +64,15 @@ int main()
 	imsrc.getNextImage(K.currentImage());
 	depth.getNextImage(K.currentDepth());
 
-	tracker.findMatches(K.currentImage(),patchList1,kpnts2,nMatches,0,dummy);
+	kpnts1.clear();
+	tracker.findMatches(K.currentImage(),patchList1,kpnts1,nMatches,true,dummy);
 	tracker.update();
 
-	//imshow("Predictions&Matches",dummy);
-	patchList1.clear();
-	K.extractPatches(kpnts2,patchList1);
-	std::cout<<"size :"<<patchList1.size()<<std::endl;
+	std::cout<<"Found "<<nMatches<<" matches"<<std::endl;
+	std::cout<<"Keypoints retained "<<kpnts1.size()<< " used for next Image"<<std::endl;
+	imshow("Predictions&Matches",dummy);
 
-	kpnts1.clear();
-	kpnts1 = kpnts2;
-
-	//K.showPatchesOnImage(kpnts1,"Patches2");
-	//K.showKeyPoints(kpnts1,"KeyPoints2");
-
-	std::cout<<nMatches<<std::endl;
-	std::cout<<tracker.Xk().P<<std::endl;
-	cvWaitKey(10);
+	cvWaitKey();
 	}
 	cvWaitKey();
 

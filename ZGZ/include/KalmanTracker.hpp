@@ -144,11 +144,7 @@ class KalmanTracker
 		}
 
 		MatrixXf Jac_toFrame_t(){
-			VectorXf Q 	= _Xkp1.x.block(6,0,4,1);
-			Quaternion<dataType> 	q(Q(0),Q(1),Q(2),Q(3));
-			AngleAxis<dataType> 	angleAxis(q);
-			MatrixXf R 	= angleAxis.toRotationMatrix();
-			return -R;
+			return -Rot();
 		}
 
 		MatrixXf Jac_toFrame_q(Vector3f p,Vector3f t){
@@ -220,6 +216,7 @@ class KalmanTracker
 				Mat& imageWithMatches
 				)
 		{
+			if(matches.size()>0) matches.clear();
 			PatchesVector::iterator iter;
 
 			if(draw) imageWithMatches = image.clone();
@@ -238,23 +235,23 @@ class KalmanTracker
 			for(iter = p.begin(), i= 0 ; iter!=p.end(); iter++, i ++)
 			{
 				r = _H.block(2*i,0, 2 ,13);
-				Uncertainity = r*_Xkp1.P*r.transpose();
+				Uncertainity = r*_Xkp1.P*r.transpose()+Matrix2f::Identity();
 				sigma = Uncertainity.diagonal().array().sqrt();
-
-
 
 				float rReg = 3.0*sigma(0);
 				float cReg = 3.0*sigma(1);
 
 				std::cerr<<"SearchRegion : ["<<rReg<<","<<cReg<<"]"<<std::endl;
 
-				std::cerr<<"_dx,dy_\n"<<r*_Xkp1.x<<std::endl;
+				//std::cerr<<"_dx,dy_\n"<<r*_Xkp1.x<<std::endl;
 
-				m = r*_Xkp1.x + Vector2f(iter->uvd.x,iter->uvd.y);
+				m = getPrediction(iter->xyz);
 
+				//m(0) = (m(0)+0.5)*480;
+				//m(1) = (m(1)+0.5)*320;
 				std::cerr<<"Prediction : \n"<<m<<std::endl;
 
-				if(draw) rectangle(imageWithMatches,Point(m(1),m(0)),Point(m(1)+1,m(0)+1),0);
+				if(draw) rectangle(imageWithMatches,Point(m(0),m(1)),Point(m(0)+1,m(1)+1),0);
 
 				//std::cout<<m<<std::endl;
 
@@ -268,6 +265,7 @@ class KalmanTracker
 					(cOrigin + cReg > image.cols|| rOrigin+ rReg > image.rows )
 					)
 				{
+					std::cerr<<"Skipped "<<std::endl;
 					continue;
 				}
 
@@ -278,15 +276,22 @@ class KalmanTracker
 
 
 				if(maxVal>MATCHING_THRESHOLD){
-					measured << cOrigin + maxLoc.x + int(PATCH_WIDTH/2),rOrigin+maxLoc.y + int(PATCH_HEIGHT/2);
+					measured << rOrigin + maxLoc.x + int(PATCH_WIDTH/2),cOrigin+maxLoc.y + int(PATCH_HEIGHT/2);
 					//measured << cOrigin + maxLoc.x , rOrigin+maxLoc.y;
-					if(draw) rectangle(imageWithMatches,Point(measured(0),measured(1)),Point(measured(0)+1,measured(1)+1),255);
-					Z.block<2,1>(2*i,0) =  measured - Vector2f(iter->uvd.x,iter->uvd.y);
-					H.block<2,13>(2*i,0)= r;
+					if(draw) rectangle(imageWithMatches,Point(measured(1),measured(0)),Point(measured(1)+1,measured(0)+1),255);
+					Z.block<2,1>(2*nmatches,0) =  measured - Vector2f(iter->uvd.x,iter->uvd.y);
+					std::cout<<"Measured"<<std::endl;
+					std::cout<<measured<<std::endl;
+					std::cout<<"difference"<<std::endl;
+					std::cout<<Z.block<2,1>(2*nmatches,0)<<std::endl;
+
+					//std::cin.get();
+
+					H.block<2,13>(2*nmatches,0)= r;
 					nmatches++;
 
 					KeyPoint kp(Point2f(measured(0),measured(1)),1,1,1,1,1);
-					matches.insert(matches.begin(),kp);
+					matches.insert(matches.end(),kp);
 				}
 			}
 			_Z = Z.topRows(2*nmatches);
@@ -295,6 +300,32 @@ class KalmanTracker
 			_R.setIdentity();
 			NrMatches = nmatches;
 
+		}
+
+		Vector2f getPrediction(const Point3d& p)
+		{
+			Vector3f p1;
+			p1 <<  p.x , p.y , p.z;
+			Vector3f P = (Rot().transpose())*(p1-t());
+			return Vector2f(5.9421434211923247e+02*P(0)/P(2),5.9104053696870778e+02*P(1)/P(2));
+		}
+
+		/**
+		 * Utility function for returning the translation part of X_{ {k+1} | {k} }
+		 * @return
+		 */
+		Vector3f t()
+		{
+			return Vector3f(_Xkp1.x.block(0,0,3,1));
+		}
+
+		Matrix3f Rot()
+		{
+			Vector4f Q 	= _Xkp1.x.block(6,0,4,1);
+			Quaternion<dataType> 	q(Q(0),Q(1),Q(2),Q(3));
+			AngleAxis<dataType> 	angleAxis(q);
+			MatrixXf R 	= angleAxis.toRotationMatrix();
+			return R;
 		}
 
 };
