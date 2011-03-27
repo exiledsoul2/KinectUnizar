@@ -11,12 +11,7 @@
 #include <Eigen/Core>
 #include <Eigen/Dense>
 
-//#include <opencv2/core/core.hpp>
-//#include <opencv2/features2d/features2d.hpp>
-//#include <opencv2/calib3d/calib3d.hpp>
 #include <opencv2/opencv.hpp>
-
-
 
 namespace ZGZ
 {
@@ -28,14 +23,15 @@ namespace ZGZ
 		ZGZ_OK = 0,
 	}ZGZ_RETURN_STATUS;
 
-#define PATCH_WIDTH 15
-#define PATCH_HEIGHT 15
+#define PATCH_WIDTH 11
+#define PATCH_HEIGHT 11
 #define IMAGE_COLS 640
 #define IMAGE_ROWS 480
 #define FOVH 1.0144686707507438
 #define FOVV 0.78980943449644714
 #define MATCHING_METHOD CV_TM_CCORR_NORMED
-#define MATCHING_THRESHOLD 0.8
+#define MATCHING_THRESHOLD 0.95
+#define DETECTOR_THRESHOLD 90
 
 	typedef struct Patch{
 		cv::Point3d uvd;
