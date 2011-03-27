@@ -49,7 +49,7 @@ void camera::detectPoints(KeyPointsVector& k){
 
 }
 
-void camera::extractPatches(KeyPointsVector K, std::vector<Patch>& patchList){
+void camera::extractPatches(KeyPointsVector K, std::vector<Patch>& patchList, Matrix3f R, Vector3f t){
 	std::vector<KeyPoint>::iterator iter;
 	if(patchList.size()>0) patchList.clear();
 
@@ -71,8 +71,9 @@ void camera::extractPatches(KeyPointsVector K, std::vector<Patch>& patchList){
 		//if all went well . create the patch and use it.
 		Patch patch;
 		patch.uvd = Point3d(x,y,depth/1000);
-		patch.xyz = toWorldXYZ(patch.uvd);
-		patch.texture = Mat(_currentImage, cvRect(xOrigin,yOrigin,PATCH_WIDTH,PATCH_HEIGHT));
+		Vector3f xyz = R*toWorldXYZ(patch.uvd)+t;
+		patch.xyz = Point3d(xyz(0),xyz(1),xyz(2));
+		patch.texture = Mat(_currentImage, Rect(xOrigin,yOrigin,PATCH_WIDTH,PATCH_HEIGHT));
 		patchList.insert(patchList.end(),patch);
 
 	}
@@ -100,23 +101,22 @@ void camera::showPatchesOnImage(KeyPointsVector K,const char* windowName){
 	KeyPointsVector::iterator iter;
 	for(iter=K.begin(); iter!=K.end(); iter++)
 	{
-		int xOrigin = iter->pt.x -(PATCH_HEIGHT-1)/2;
-		int yOrigin = iter->pt.y -(PATCH_WIDTH -1)/2;
-
-		Point p1(xOrigin,yOrigin);
-		Point p2(xOrigin+PATCH_HEIGHT,yOrigin+PATCH_WIDTH);
+		int x = iter->pt.x;
+		int y = iter->pt.y;
+		int xOrigin = x - (PATCH_HEIGHT-1)/2;
+		int yOrigin = y - (PATCH_WIDTH -1)/2;
 
 		if(_currentDepth.at<unsigned short int>(iter->pt.y,iter->pt.x)>1 )
-			rectangle(img,p1,p2,255);
+			rectangle(img,Rect(xOrigin,yOrigin,PATCH_WIDTH,PATCH_HEIGHT),255);
 		else
-			rectangle(img,p1,p2,0);
+			rectangle(img,Rect(xOrigin,yOrigin,PATCH_WIDTH,PATCH_HEIGHT),0);
 	}
 
 	imshow(windowName,img);
 }
 void camera :: detectAndExtractPatches(KeyPointsVector& kpts,PatchesVector& patchesVector){
-	detectPoints(kpts);
-	extractPatches(kpts,patchesVector);
+	//detectPoints(kpts);
+	//extractPatches(kpts,patchesVector);
 }
 
 /*
@@ -152,16 +152,20 @@ void camera :: matchKeyPoints(
 */
 
 
-Point3d camera::toWorldXYZ(Point3d uvd){
-	static const double fx_d = 1.0 / 5.9421434211923247e+02;
-	static const double fy_d = 1.0 / 5.9104053696870778e+02;
-	static const double cx_d = 3.3930780975300314e+02;
-	static const double cy_d = 2.4273913761751615e+02;
+Vector3f camera::toWorldXYZ(Point3d uvd){
+	static const double fx_d = 1.0 / _K.at<double>(0,0);
+	static const double fy_d = 1.0 / _K.at<double>(1,1);
+	static const double cx_d = _K.at<double>(0,2);
+	static const double cy_d = _K.at<double>(1,2);
 
 	double X = uvd.x;
 	double Y = uvd.y;
 	const double depth = uvd.z;
 	float x = float((X - cx_d) * depth * fx_d);
 	float y = float((Y - cy_d) * depth * fy_d);
-	return Point3d(x,y,depth);
+	return Vector3f(x,y,depth);
+}
+
+Mat& camera::K(){
+	return _K;
 }

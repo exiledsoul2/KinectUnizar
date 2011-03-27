@@ -85,7 +85,7 @@ class camera
 		 */
 		void fastFeatureDetector(int threshold, int nonMaximalSuppression);
 		void detectPoints(KeyPointsVector&);
-		void extractPatches(KeyPointsVector, PatchesVector&);
+		void extractPatches(KeyPointsVector, PatchesVector&, Matrix3f, Vector3f);
 		void undistortPoints(KeyPointsVector& k);
 		void showKeyPoints(const KeyPointsVector& k,std::string windowname);
 		Mat& currentImage();
@@ -106,7 +106,8 @@ class camera
 		//		const KeyPointsVector currentImage,
 		//		KeyPointsVector& result
 		//		);
-		Point3d toWorldXYZ(Point3d uvd);
+		Vector3f toWorldXYZ(Point3d uvd);
+		Mat& K();
 
 };
 
