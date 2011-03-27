@@ -23,59 +23,78 @@ int main()
 	//Initalizing the state vector and covariance
 	tracker.Xk().x << 0,0,0,0,0,0,1,0,0,0,W_EPS,W_EPS,W_EPS;
 	tracker.Xk().P.setZero();
-	//tracker.Xk().P.block(3,3,3,3) = I3*W_EPS;
+	//tracker.Xk().P.setIdentity();
+	//tracker.Xk().P *= W_EPS;
+	tracker.Xk().P.block(3,3,3,3) = I3*W_EPS;
 	tracker.Xk().P.bottomRightCorner(3,3)=I3*W_EPS;
 
 	// Model Noise covariance
 	tracker.Q().setZero();
 	tracker.Q().block<3,3>(3,3) = I3;
 	tracker.Q().block<3,3>(10,10) = I3;
+
 	// The measurement Noise covariance depends on the measurement. init later
 
-	ImageSource imsrc(DATASET_PATH,	"",	"ppm",200,900,4);
-	ImageSource depth(DATASET_PATH,	"",	"dep",200,900,4);
+	ImageSource imsrc(DATASET_PATH,	"",	"ppm",30,1100,4);
+	ImageSource depth(DATASET_PATH,	"",	"dep",30,1100,4);
 
 	KeyPointsVector kpnts1,kpnts2;
 	std::vector<Patch> patchList1,patchList2;
-	K.fastFeatureDetector(70,1);
-
+	K.fastFeatureDetector(DETECTOR_THRESHOLD,1);
+	if(K.readCalibration("./calibration_rgb.yaml","camera_matrix","distortion_coefficients")==ZGZ_ERROR){
+		std::cerr<<"Unable to read calibration params"<<std::endl;
+		return -1;
+	}
 	int nMatches;
 	Mat dummy;
-
-	double fu = 5.9421434211923247e+02;
-	double fv = 5.9104053696870778e+02;
+	Mat CameraK = K.K();
 
 	imsrc.getNextImage(K.currentImage());
 	depth.getNextImage(K.currentDepth());
+
+	//Extract Patches and the points in  XYZ are assumed to be the
+	// the ground truth points. (uv may change, but XYZ will not)
+
 	K.detectPoints(kpnts1);
+	K.extractPatches(kpnts1,patchList1,tracker.Xk().Rot(),tracker.Xk().t());
+
+	std::cout<<tracker.Xk().Rot()<<std::endl<<tracker.Xk().t()<<std::endl;
 
 	while(!imsrc.done()){
 
-	patchList1.clear();
-	K.extractPatches(kpnts1,patchList1);
 	std::cerr<<"Current number of patches : "<<patchList1.size()<<std::endl;
-	K.showPatchesOnImage(kpnts1,"Patches1");
-	K.showKeyPoints(kpnts1,"KeyPoints1");
-	imshow("DEPTH",K.currentDepth()>0);
+	//K.showPatchesOnImage(kpnts1,"Patches1");
+	//K.showKeyPoints(kpnts1,"KeyPoints1");
 
 	tracker.predict();
-	tracker.constructH(patchList1,tracker.Xkp1().x.block<3,1>(0,0),fu,fv);
 
 	imsrc.getNextImage(K.currentImage());
 	depth.getNextImage(K.currentDepth());
 
-	kpnts1.clear();
-	tracker.findMatches(K.currentImage(),patchList1,kpnts1,nMatches,true,dummy);
+	kpnts2.clear();
+	tracker.findMatches(K.currentImage(),CameraK,patchList1,kpnts2,nMatches,false,dummy);
 	tracker.update();
 
-	std::cout<<"Found "<<nMatches<<" matches"<<std::endl;
-	std::cout<<"Keypoints retained "<<kpnts1.size()<< " used for next Image"<<std::endl;
-	imshow("Predictions&Matches",dummy);
+	std::cout<<tracker.Xk().x<<std::endl;
 
-	cvWaitKey();
+	std::cout<<"Found "<<nMatches<<" matches"<<std::endl;
+	std::cout<<"Keypoints retained "<<kpnts2.size()<< " used for next Image"<<std::endl;
+	//imshow("Predictions&Matches",dummy);
+	//K.extractPatches(kpnts2,patchList2);
+	if(nMatches<50)
+	{
+		kpnts1.clear();
+		//patchList1.clear();
+		K.detectPoints(kpnts1);
+		K.extractPatches(kpnts1,patchList1,tracker.Xk().Rot(),tracker.Xk().t());
+		std::cin.get();
+	}
+	K.showPatchesOnImage(kpnts2,"NEWpatches");
+	cvWaitKey(10);
 	}
 	cvWaitKey();
 
 }
+
 
 
