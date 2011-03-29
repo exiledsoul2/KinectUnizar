@@ -22,81 +22,9 @@
 #include <Eigen/Geometry>
 #include <Eigen/LU>
 #include <ZGZ.hpp>
-
+#include <state.hpp>
+#include <keyframe.hpp>
 using namespace Eigen;
-
-#define dataType float	//!< Defines the primary datatype of the filter
-#define TS (1.0/30.0)
-#define W_EPS 0.0000000001
-typedef enum indices{
-	tx = 0,
-	ty,
-	tz,
-	vx,
-	vy,
-	vz,
-	q0,
-	q1,
-	q2,
-	q3,
-	wx,
-	wy,
-	wz,
-}indices;
-
-template <typename stateVector_t, typename stateCovariance_t>
-class State {
-public:
-	stateVector_t x;
-	stateCovariance_t P;
-	Vector3f t()
-	{
-		return Vector3f(x.block(tx,0,3,1));
-	}
-
-	Matrix3f Rot()
-	{
-		Vector4f Q 	= x.block(q0,0,4,1);
-		Quaternion<dataType> 	q(Q(0),Q(1),Q(2),Q(3));
-		return q.toRotationMatrix();
-	}
-	void normalizeP()
-	{
-		/*
-		 J=(r*r+x*x+y*y+z*z)^(-3/2)*...
-	[x*x+y*y+z*z         -r*x         -r*y         -r*z;
-	-x*r  r*r+y*y+z*z         -x*y         -x*z;
-	-y*r         -y*x  r*r+x*x+z*z         -y*z;
-	-z*r         -z*x         -z*y  r*r+x*x+y*y];
-	*/
-		Quaternion<float> q(x(q0),x(q1),x(q2),x(q3));
-		float norm = q.norm();
-
-		float r = q.w();
-		float qx = q.x();
-		float qy = q.y();
-		float qz = q.z();
-
-		Matrix4f J;
-		J<< qx*qx+qy*qy+qz*qz,		-r*qx,         -r*qy,          -r*qz,
-				-qx*r,	 r*r+qy*qy+qz*qz,         -qx*qy,          -qx*qz,
-				-qy*r, 			-qy*qx,  r*r+qx*qx+qz*qz,          -qy*qz,
-				-qz*r,           -qz*qx,         -qz*qy,   r*r+qx*qx+qy*qy;
-
-		J*= pow(double(norm),double(-1.5));
-
-		P.block(0,q0,3,4)  *= J.transpose();
-		P.block(3,q0,3,4)  *= J.transpose();
-		P.block(7,q0,4,4)  *= J.transpose();
-		P.block(10,q0,3,4) *= J.transpose();
-
-		P.block(q0,0,4,13) = J* P.block(q0,0,4,13);
-
-		x.block(q0,0,4,1) /= norm;
-
-	}
-
-};
 
 #define I3 Matrix<dataType,3,3>::Identity()
 #define MatrixXt Matrix<dataType,Dynamic,Dynamic>
@@ -183,10 +111,20 @@ class KalmanTracker
 			MatrixXf Ht = _H.transpose();
 			_zCovSize S = _H*_Xkp1.P*Ht + _R ;
 			std::cerr<<"Inverting"<<std::endl;
-			MatrixXf K = _Xkp1.P*Ht*S.fullPivLu().inverse();
+			MatrixXf Kt;
+			double freq = getTickFrequency();
+			double t1 =  (double) getTickCount();
+			//Kt = (_Xkp1.P*Ht*S.lu().inverse()).transpose();
+			Kt = (S.llt().solve(_H*_Xkp1.P));
+			//Kt = S.fullPivLu().solve(_H*_Xkp1.P.transpose());
+			//std::cerr<<"MSE : "<<(K-Kt.transpose()).array().square().sum()/(K.rows()*K.cols());
+
+			std::cerr<<((double)getTickCount()-t1)*1000/freq<<" ms "<<std::endl;
 			std::cerr<<"Inverting Done"<<std::endl;
-			_Xk.x = _Xkp1.x + K*(_Z); //<! @note: _Z is the residual
-			_Xk.P = (_xCovSize::Identity() - K*_H)*_Xkp1.P;
+
+			_Xk.x = _Xkp1.x + Kt.transpose()*(_Z); //<! @note: _Z is the residual
+			_Xk.P = (_xCovSize::Identity() - Kt.transpose()*_H)*_Xkp1.P;
+
 			_Xk.normalizeP();
 		}
 
@@ -351,8 +289,8 @@ class KalmanTracker
 				Uncertainity = r*P_blocks*r.transpose()+Matrix2f::Identity();
 				if (show) std::cout<<Uncertainity<<std::endl;
 
-				float xReg = 2.0* sqrt(Uncertainity(0,0));
-				float yReg = 2.0* sqrt(Uncertainity(1,1));
+				float xReg = 3.0* sqrt(Uncertainity(0,0));
+				float yReg = 3.0* sqrt(Uncertainity(1,1));
 
 				if (show) std::cerr<<"SearchRegion : ["<<xReg<<","<<yReg<<"]"<<std::endl;
 
@@ -387,7 +325,7 @@ class KalmanTracker
 				if (show) std::cerr<<"Limits : "<<xOrigin+xReg<<" , "<<yOrigin+yReg<<std::endl;
 				res.setTo(-1);
 				Rect searchRegion(xOrigin,yOrigin,xReg,yReg);
-				if(draw) rectangle(imageWithMatches,searchRegion,255,1);
+				//if(draw) rectangle(imageWithMatches,searchRegion,255,1);
 				//imshow("mat",Mat(image,Rect(xOrigin,yOrigin,xReg,yReg)));
 				//imshow("template",iter->texture);
 				//cvWaitKey();
@@ -400,7 +338,7 @@ class KalmanTracker
 					if(PATCH_HEIGHT > xReg )
 						measured << xOrigin + maxLoc.x + xReg/2, yOrigin + maxLoc.y + yReg/2 ;
 					else
-						measured << xOrigin + maxLoc.x + PATCH_WIDTH/2, yOrigin + maxLoc.y + PATCH_HEIGHT/2 ;
+						measured << xOrigin + maxLoc.x + (int)PATCH_WIDTH/2, yOrigin + maxLoc.y + (int)PATCH_HEIGHT/2 ;
 					if(draw) {
 						rectangle(imageWithMatches,Rect(measured(0)-1,measured(1)-1,3,3),255);
 						line(imageWithMatches,Point(m(0),m(1)),Point(measured(0),measured(1)),0);
@@ -425,6 +363,7 @@ class KalmanTracker
 			_H = H.topRows(2*nmatches);
 			_R = MatrixXf(2*nmatches,2*nmatches);
 			_R.setIdentity();
+			_R*=10;
 			NrMatches = nmatches;
 
 		}

@@ -8,18 +8,14 @@
 #include <imagesource.hpp>
 #include <ZGZ.hpp>
 #include <KalmanTracker.hpp>
-
-
+#include <keyframe.hpp>
 
 using namespace ZGZ::zcv;
 
-#define DATASET_PATH "/home/yasir/CODE/KinectUnizar/KinectCapture/Debug/translation_aligned/"
+#define DATASET_PATH "/home/yasir/CODE/KinectUnizar/KinectCapture/Debug/desk/"
 
-int main()
+void initTracker(Tracker& tracker)
 {
-	camera K;
-	Tracker tracker;
-
 	//Initalizing the state vector and covariance
 	tracker.Xk().x << 0,0,0,0,0,0,1,0,0,0,W_EPS,W_EPS,W_EPS;
 	tracker.Xk().P.setZero();
@@ -32,11 +28,19 @@ int main()
 	tracker.Q().setZero();
 	tracker.Q().block<3,3>(3,3) = I3;
 	tracker.Q().block<3,3>(10,10) = I3;
-
 	// The measurement Noise covariance depends on the measurement. init later
+}
 
-	ImageSource imsrc(DATASET_PATH,	"",	"ppm",30,1100,4);
-	ImageSource depth(DATASET_PATH,	"",	"dep",30,1100,4);
+int main()
+{
+	camera K;
+	Tracker tracker;
+	KeyFrameVector keyframes;
+
+	initTracker(tracker);
+
+	ImageSource imsrc(DATASET_PATH,	"",	"ppm",100,1100,4);
+	ImageSource depth(DATASET_PATH,	"",	"dep",100,1100,4);
 
 	KeyPointsVector kpnts1,kpnts2;
 	std::vector<Patch> patchList1,patchList2;
@@ -60,6 +64,8 @@ int main()
 
 	std::cout<<tracker.Xk().Rot()<<std::endl<<tracker.Xk().t()<<std::endl;
 
+	keyframes.insert(keyframes.end(),TrackerKeyFrame(K.currentImage(),K.currentDepth(),kpnts1,tracker.Xk()));
+
 	while(!imsrc.done()){
 
 	std::cerr<<"Current number of patches : "<<patchList1.size()<<std::endl;
@@ -72,21 +78,24 @@ int main()
 	depth.getNextImage(K.currentDepth());
 
 	kpnts2.clear();
-	tracker.findMatches(K.currentImage(),CameraK,patchList1,kpnts2,nMatches,false,dummy);
+	tracker.findMatches(K.currentImage(),CameraK,patchList1,kpnts2,nMatches,true,dummy);
 	tracker.update();
 
 	std::cout<<tracker.Xk().x<<std::endl;
+	std::cout<<tracker.Xk().P.block<3,3>(0,0)<<std::endl;
 
 	std::cout<<"Found "<<nMatches<<" matches"<<std::endl;
 	std::cout<<"Keypoints retained "<<kpnts2.size()<< " used for next Image"<<std::endl;
-	//imshow("Predictions&Matches",dummy);
+	imshow("Predictions&Matches",dummy);
 	//K.extractPatches(kpnts2,patchList2);
-	if(nMatches<50)
+	if(nMatches<MIN_MATCHES_THRESHOLD)
 	{
-		kpnts1.clear();
+		//kpnts1.clear();
 		//patchList1.clear();
 		K.detectPoints(kpnts1);
 		K.extractPatches(kpnts1,patchList1,tracker.Xk().Rot(),tracker.Xk().t());
+		keyframes.insert(keyframes.end(),TrackerKeyFrame(K.currentImage(),K.currentDepth(),kpnts1,tracker.Xk()));
+		std::cout<<"Added new key frame "<<std::endl;
 		std::cin.get();
 	}
 	K.showPatchesOnImage(kpnts2,"NEWpatches");

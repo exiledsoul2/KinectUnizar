@@ -33,7 +33,7 @@ bool camera::isCalibrated(){
 
 void camera::fastFeatureDetector(int threshold, int nonMaximalSuppression){
 	if(_ffd==NULL)
-		_ffd = new FastFeatureDetector(threshold,nonMaximalSuppression);
+		_ffd = new SurfFeatureDetector(threshold);
 	else{
 		delete _ffd;
 		_ffd = new FastFeatureDetector(threshold,nonMaximalSuppression);
@@ -51,7 +51,7 @@ void camera::detectPoints(KeyPointsVector& k){
 
 void camera::extractPatches(KeyPointsVector K, std::vector<Patch>& patchList, Matrix3f R, Vector3f t){
 	std::vector<KeyPoint>::iterator iter;
-	if(patchList.size()>0) patchList.clear();
+	//if(patchList.size()>0) patchList.clear();
 
 	for(iter = K.begin();iter != K.end(); iter++)
 	{

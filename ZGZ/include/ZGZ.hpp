@@ -25,14 +25,19 @@ namespace ZGZ
 
 #define PATCH_WIDTH 11
 #define PATCH_HEIGHT 11
+
 #define IMAGE_COLS 640
 #define IMAGE_ROWS 480
+
 #define FOVH 1.0144686707507438
 #define FOVV 0.78980943449644714
-#define MATCHING_METHOD CV_TM_CCORR_NORMED
-#define MATCHING_THRESHOLD 0.95
-#define DETECTOR_THRESHOLD 90
 
+#define MATCHING_METHOD CV_TM_CCORR_NORMED
+
+#define MATCHING_THRESHOLD 0.95
+#define DETECTOR_THRESHOLD 2000
+
+#define MIN_MATCHES_THRESHOLD 50
 	typedef struct Patch{
 		cv::Point3d uvd;
 		cv::Point3d xyz;
@@ -42,6 +47,9 @@ namespace ZGZ
 #define IMG_ROWS 	480
 #define IMG_COLS	640
 
-}
+#define dataType float	//!< Defines the primary datatype of the filter
+#define TS (1.0/30.0)
+#define W_EPS 0.0000000001
 
+}
 #endif /* ZGZ_HPP_ */

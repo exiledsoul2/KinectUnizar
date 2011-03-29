@@ -29,7 +29,7 @@ class camera
 	bool 	_isCalibrated;
 
 	string 	_model;
-	FastFeatureDetector * _ffd;
+	FeatureDetector * _ffd;
 
 
 	public:
