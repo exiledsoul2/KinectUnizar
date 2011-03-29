@@ -33,7 +33,7 @@ bool camera::isCalibrated(){
 
 void camera::fastFeatureDetector(int threshold, int nonMaximalSuppression){
 	if(_ffd==NULL)
-		_ffd = new SurfFeatureDetector(threshold);
+		_ffd = new FastFeatureDetector(threshold,nonMaximalSuppression);
 	else{
 		delete _ffd;
 		_ffd = new FastFeatureDetector(threshold,nonMaximalSuppression);
@@ -45,7 +45,7 @@ void camera::detectPoints(KeyPointsVector& k){
 	if(_ffd)
 		_ffd->detect(_currentImage,k);
 	else
-		std::cout<<"ERROR : Fast Feature Detector is uninitialized";
+		std::cerr<<"ERROR : Fast Feature Detector is uninitialized";
 
 }
 

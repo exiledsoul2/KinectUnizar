@@ -12,7 +12,7 @@
 
 using namespace ZGZ::zcv;
 
-#define DATASET_PATH "/home/yasir/CODE/KinectUnizar/KinectCapture/Debug/desk/"
+#define DATASET_PATH "/home/yasir/CODE/KinectUnizar/KinectCapture/Debug/translation_aligned/"
 
 void initTracker(Tracker& tracker)
 {
