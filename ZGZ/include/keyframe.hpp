@@ -13,26 +13,49 @@
 using namespace cv;
 using namespace Eigen;
 
-template <typename stateVector_t, typename covariance_t>
+#define TrackerState State< Matrix<float,13,1>,Matrix<float,13,13> >
+
 class KeyFrame{
 	public:
+		unsigned int id;
 		Mat image;
 		Mat depth;
-		std::vector<KeyPoint> keyPoints;
-		State<stateVector_t,covariance_t> state;
+		TrackerState state;
 		KeyFrame(Mat& im,
 				Mat& dep,
-				std::vector<KeyPoint>& kpnts,
-				State<stateVector_t,covariance_t>& st
+				TrackerState& st
 				){
 			image = im.clone();
 			depth = dep.clone();
-			keyPoints = kpnts;
 			state.x = st.x;
 			state.P = st.P;
 		}
 };
 
-#define TrackerKeyFrame KeyFrame< Matrix<float,13,1>,Matrix<float,13,13> >
-#define KeyFrameVector std::vector<TrackerKeyFrame>
+class KeyFrameManager{
+private:
+	std::vector< KeyFrame > keyFrames;
+	unsigned int count;
+public:
+	KeyFrameManager(): count(0) {}
+
+	void addKeyFrame(
+			cv::Mat& im,
+			cv::Mat& dep,
+			TrackerState& st
+			)
+	{
+		keyFrames.insert(keyFrames.end(),KeyFrame(im,dep,st));
+	}
+	int numberOfkeyFrames()
+	{
+		return keyFrames.size();
+	}
+	int currentKeyFrameId(){
+		return numberOfkeyFrames()-1;
+	}
+
+};
+
+
 #endif /* KEYFRAME_HPP_ */

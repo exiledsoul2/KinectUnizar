@@ -36,6 +36,7 @@
 //---------------------------------------------------------------------------
 // Includes
 //---------------------------------------------------------------------------
+#include <omp.h>
 #include <XnOpenNI.h>
 #include <XnLog.h>
 #include <XnCppWrapper.h>
@@ -44,6 +45,7 @@
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/calib3d/calib3d.hpp>
 #include <opencv2/opencv.hpp>
+#include <queue>
 
 #define SAMPLE_XML_PATH "./SamplesConfig.xml"
 
@@ -66,25 +68,38 @@ char depthPath[1024];
 char rgbPath[1024];
 int alignImages = 0;
 
-int writetofile(const XnDepthPixel* depthData, const XnUInt8* rgbData, int frameID)
+struct data
+{
+	unsigned int frameNumber;
+	XnUInt8 rgb[921600];
+	XnDepthPixel dep[640*480];
+};
+
+std::queue<data> frames;
+
+int writetofile()
 {
 	char filename[1024];
+	if(!frames.empty())
+	{
+		data d = frames.front();
+		frames.pop();
+		sprintf(filename,"%s/%04d.dep",depthPath,d.frameNumber);
+		FILE * dfp = fopen(filename,"wb");
+		if(dfp==NULL)
+			std::cout<<"make sure path is correnct";
+		fwrite((char*)d.dep,FRAME_SIZE_DEPTH,1,dfp);
+		fclose(dfp);
 
-	sprintf(filename,"%s/%04d.dep",depthPath,frameID);
-	FILE * dfp = fopen(filename,"wb");
-	if(dfp==NULL)
-		return -1;
-	fwrite(depthData,FRAME_SIZE_DEPTH,1,dfp);
-	fclose(dfp);
+		sprintf(filename,"%s/%04d.ppm",rgbPath,d.frameNumber);
+		FILE * rfp = fopen(filename,"wb");
+		if(rfp==NULL)
+				return -1;
+		fprintf(rfp,"%s\n",header);
+		fwrite(d.rgb,FRAME_SIZE_RGB,1,rfp);
+		fclose(rfp);
 
-	sprintf(filename,"%s/%04d.ppm",rgbPath,frameID);
-	FILE * rfp = fopen(filename,"wb");
-	if(rfp==NULL)
-			return -1;
-	fprintf(rfp,"%s\n",header);
-	fwrite(rgbData,FRAME_SIZE_RGB,1,rfp);
-	fclose(rfp);
-
+	}
 	return 0;
 
 }
@@ -149,11 +164,6 @@ int main(int argc,char *argv[])
 	cvNamedWindow("RGB");
 	cvNamedWindow("Depth");
 
-	static IplImage *img = 0;
-	if (!img) img = cvCreateImageHeader(cvSize(640,480), 8, 3);
-
-	static IplImage *dep = 0;
-	if(!dep) dep = cvCreateImageHeader(cvSize(640,480),16,1);
 
 	DepthGenerator depth;
 	nRetVal = context.FindExistingNode(XN_NODE_TYPE_DEPTH, depth);
@@ -189,46 +199,66 @@ int main(int argc,char *argv[])
 	CvMat * cameraMatrix = (CvMat *)cvReadByName(fs,0,"camera_matrix");
 	CvMat * distortionCoeffs = (CvMat *)cvReadByName(fs,0,"distortion_coefficients");
 
+	static IplImage *img = 0;
+	if (!img) img = cvCreateImageHeader(cvSize(640,480), 8, 3);
+
+	static IplImage *dep = 0;
+	if(!dep) dep = cvCreateImageHeader(cvSize(640,480),16,1);
+
+
 	printf("Capture Started ...\n");
-	while (!xnOSWasKeyboardHit())
-	{
-		nRetVal = context.WaitOneUpdateAll(depth);
-		if (nRetVal != XN_STATUS_OK)
+
+	omp_set_num_threads(2);
+#pragma omp parallel shared(frames)
+		while (!xnOSWasKeyboardHit())
 		{
-			printf("UpdateData failed: %s\n", xnGetStatusString(nRetVal));
-			continue;
+			if(omp_get_thread_num()==0){
+				nRetVal = context.WaitOneUpdateAll(depth);
+				if (nRetVal != XN_STATUS_OK)
+				{
+					printf("UpdateData failed: %s\n", xnGetStatusString(nRetVal));
+					continue;
+				}
+
+				data frame;
+				xnFPSMarkFrame(&xnFPS);
+				std::cout<<"New frame "<<std::endl;
+				depth.GetMetaData(depthMD);
+				image.GetMetaData(imageMD);
+
+				memcpy(frame.dep,depthMD.Data(),FRAME_SIZE_DEPTH);
+				memcpy(frame.rgb,imageMD.Data(),FRAME_SIZE_RGB);
+				frame.frameNumber = depthMD.FrameID();
+
+				frames.push(frame);
+
+				cvSetData(img,frame.rgb, 640*3);
+				cvSetData(dep,frame.dep, 640*2);
+				IplImage* depcvtd = cvCreateImage(cvSize(640,480),8,1);
+				cvConvertScale(dep,depcvtd, -255.0/10000.0,255);
+
+				IplImage * undistortedImg =cvCloneImage(img);
+
+				cvUndistort2(img,undistortedImg,cameraMatrix,distortionCoeffs);
+
+				imshow("RGB",undistortedImg);
+				imshow("Depth",depcvtd);
+				cvWaitKey(5);
+			}
+			else
+			{
+				writetofile();
+			}
+
 		}
 
-		xnFPSMarkFrame(&xnFPS);
-
-		depth.GetMetaData(depthMD);
-		image.GetMetaData(imageMD);
-
-		cvSetData(img,(unsigned char *)imageMD.Data(), 640*3);
-		cvSetData(dep,(unsigned char *)depthMD.Data(), 640*2);
-		IplImage* depcvtd = cvCreateImage(cvSize(640,480),8,1);
-		cvConvertScale(dep,depcvtd, -255.0/10000.0,255);
-
-		IplImage * undistortedImg =cvCloneImage(img);
-
-		cvUndistort2(img,undistortedImg,cameraMatrix,distortionCoeffs);
-
-		imshow("RGB",undistortedImg);
-		imshow("Depth",depcvtd);
-		cvWaitKey(5);
-
-		if(writetofile(depthMD.Data(),imageMD.Data(),depthMD.FrameID())<0){
-			printf("Could not write to file .. make sure the directory[%s] is present\n",rgbPath);
-			return -1;
-		}
+		cvDestroyAllWindows();
+		context.Shutdown();
+		printf("Capture Completed\n");
+		printf("Done\n");
 
 		//fprintf(stderr,"FPS: %f\n", xnFPSCalc(&xnFPS));
-	}
 
-	cvDestroyAllWindows();
-	context.Shutdown();
-	printf("Capture Completed\n");
-	printf("Done");
 
 
 

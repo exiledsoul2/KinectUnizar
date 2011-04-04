@@ -10,7 +10,7 @@
 
 #include <iostream>
 #include <ZGZ.hpp>
-
+#include <patch.hpp>
 using namespace std;
 using namespace ZGZ::zEigen;
 using namespace ZGZ::zcv;
@@ -85,7 +85,7 @@ class camera
 		 */
 		void fastFeatureDetector(int threshold, int nonMaximalSuppression);
 		void detectPoints(KeyPointsVector&);
-		void extractPatches(KeyPointsVector, PatchesVector&, Matrix3f, Vector3f);
+		void extractPatches(KeyPointsVector, PatchesVector&, Matrix3f, Vector3f,unsigned int);
 		void undistortPoints(KeyPointsVector& k);
 		void showKeyPoints(const KeyPointsVector& k,std::string windowname);
 		Mat& currentImage();
@@ -108,6 +108,8 @@ class camera
 		//		);
 		Vector3f toWorldXYZ(Point3d uvd);
 		Mat& K();
+		void showMatches(const PatchesVector& p,matchesList& M, const char* windowName);
+		void addSupport(PatchesVector& p, matchesList& matches, unsigned int keyFrameID);
 
 };
 

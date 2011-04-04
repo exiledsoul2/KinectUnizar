@@ -33,7 +33,8 @@ bool camera::isCalibrated(){
 
 void camera::fastFeatureDetector(int threshold, int nonMaximalSuppression){
 	if(_ffd==NULL)
-		_ffd = new FastFeatureDetector(threshold,nonMaximalSuppression);
+		_ffd = new GridAdaptedFeatureDetector( new SurfFeatureDetector(1500),400,10,10);
+		//_ffd = new FastFeatureDetector(threshold,nonMaximalSuppression);
 	else{
 		delete _ffd;
 		_ffd = new FastFeatureDetector(threshold,nonMaximalSuppression);
@@ -49,7 +50,13 @@ void camera::detectPoints(KeyPointsVector& k){
 
 }
 
-void camera::extractPatches(KeyPointsVector K, std::vector<Patch>& patchList, Matrix3f R, Vector3f t){
+void camera::extractPatches(
+		KeyPointsVector K,
+		std::vector<Patch>& patchList,
+		Matrix3f R,
+		Vector3f t,
+		unsigned int keyFrameCount
+		){
 	std::vector<KeyPoint>::iterator iter;
 	//if(patchList.size()>0) patchList.clear();
 
@@ -69,11 +76,15 @@ void camera::extractPatches(KeyPointsVector K, std::vector<Patch>& patchList, Ma
 		if( depth < 1 ) continue;
 		//std::cout<<"["<<iter->pt.y<<","<<iter->pt.x<<"]"<<std::endl;
 		//if all went well . create the patch and use it.
+
+
 		Patch patch;
 		patch.uvd = Point3d(x,y,depth/1000);
 		Vector3f xyz = R*toWorldXYZ(patch.uvd)+t;
 		patch.xyz = Point3d(xyz(0),xyz(1),xyz(2));
 		patch.texture = Mat(_currentImage, Rect(xOrigin,yOrigin,PATCH_WIDTH,PATCH_HEIGHT));
+		patch.sourceKF = keyFrameCount;
+		patch.supportList.insert(patch.supportList.end(),patchSupport(keyFrameCount,x,y));
 		patchList.insert(patchList.end(),patch);
 
 	}
@@ -161,11 +172,39 @@ Vector3f camera::toWorldXYZ(Point3d uvd){
 	double X = uvd.x;
 	double Y = uvd.y;
 	const double depth = uvd.z;
-	float x = float((X - cx_d) * depth * fx_d);
-	float y = float((Y - cy_d) * depth * fy_d);
-	return Vector3f(x,y,depth);
+	float x = float((X - cx_d) *fx_d);
+	float y = float((Y - cy_d) *fy_d);
+	float z = 1;
+
+	Vector3f v(x,y,z);
+	v.normalize();
+	return v*depth;
 }
 
 Mat& camera::K(){
 	return _K;
+}
+
+void camera::showMatches(const PatchesVector& p,matchesList& M, const char* windowName)
+{
+	Mat image = _currentImage.clone();
+	matchesList::iterator match;
+	KeyPointsVector v;
+	foralliter(match,M)
+	{
+		v.insert(v.end(),cv::KeyPoint(Point2f(match->u,match->v),1.,1.,1.,1,1));
+	}
+	showPatchesOnImage(v,windowName);
+}
+
+void camera::addSupport(PatchesVector& p, matchesList& matches, unsigned int keyFrameID){
+
+	matchesList::iterator mIter;
+	foralliter(mIter,matches)
+	{
+
+		p[(mIter->pointidx)].supportList.insert(
+				p[(mIter->pointidx)].supportList.begin(),
+				patchSupport(keyFrameID,mIter->u,mIter->v));
+	}
 }

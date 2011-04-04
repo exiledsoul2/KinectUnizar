@@ -41,8 +41,7 @@ public:
 
 	Matrix3f Rot()
 	{
-		Vector4f Q 	= x.block(q0,0,4,1);
-		Quaternion<dataType> 	q(Q(0),Q(1),Q(2),Q(3));
+		Quaternion<dataType> 	q(x(q0),x(q1),x(q2),x(q3));
 		return q.toRotationMatrix();
 	}
 	void normalizeP()
@@ -57,6 +56,9 @@ public:
 		Quaternion<float> q(x(q0),x(q1),x(q2),x(q3));
 		float norm = q.norm();
 
+
+
+
 		float r = q.w();
 		float qx = q.x();
 		float qy = q.y();
@@ -68,14 +70,18 @@ public:
 				-qy*r, 			-qy*qx,  r*r+qx*qx+qz*qz,          -qy*qz,
 				-qz*r,           -qz*qx,         -qz*qy,   r*r+qx*qx+qy*qy;
 
-		J*= pow(double(norm),double(-1.5));
+		J*= 1.0/std::pow(norm*norm,double(1.5));;
 
-		P.block(0,q0,3,4)  *= J.transpose();
-		P.block(3,q0,3,4)  *= J.transpose();
-		P.block(7,q0,4,4)  *= J.transpose();
-		P.block(10,q0,3,4) *= J.transpose();
+		P.block(tx,q0,3,4)  *= J.transpose();
+		P.block(vx,q0,3,4)  *= J.transpose();
+		P.block(q0,q0,4,4)  *= J.transpose();
+		P.block(wx,q0,3,4) *= J.transpose();
 
-		P.block(q0,0,4,13) = J* P.block(q0,0,4,13);
+		P.block(q0,tx,4,6) = J* P.block(q0,tx,4,6);
+		P.block(q0,wx,4,3) = J* P.block(q0,wx,4,3);
+
+		P.block(q0,q0,4,4) = J* P.block(q0,q0,4,4) * J.transpose();
+
 
 		x.block(q0,0,4,1) /= norm;
 

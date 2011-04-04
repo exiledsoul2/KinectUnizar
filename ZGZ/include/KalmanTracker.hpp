@@ -24,6 +24,10 @@
 #include <ZGZ.hpp>
 #include <state.hpp>
 #include <keyframe.hpp>
+#include <evd2by2.hpp>
+#include <patch.hpp>
+
+
 using namespace Eigen;
 
 #define I3 Matrix<dataType,3,3>::Identity()
@@ -100,7 +104,18 @@ class KalmanTracker
 			_F.block(q0,q0,4,4)  = Matrix4f::Identity()+0.5*TS*Omega;
 			_F.block(q0,::wx,4,3) = 0.5*TS*Pi ;
 
-			_Xkp1.x = _F*_Xk.x ;
+			//!@note : is this correct?
+			//!_Xkp1.x = _F*_Xk.x ;
+
+			//x+ = x+Ts*v
+			_Xkp1.x.block(tx,0,3,1) = _Xk.x.block(tx,0,3,1)+TS*_Xk.x.block(vx,0,3,1);
+			// const velocity
+			_Xkp1.x.block(vx,0,3,1) = _Xk.x.block(vx,0,3,1);
+			// q+ = q + .5 TS omega(w).q
+			_Xkp1.x.block(q0,0,4,1) = _Xk.x.block(q0,0,4,1)+ 0.5*TS*Omega* _Xk.x.block(q0,0,4,1);
+
+			_Xkp1.x.block(::wx,0,3,1) = _Xk.x.block(::wx,0,3,1);
+
 			_Xkp1.P = _F*_Xk.P*_F.transpose()+_Q;
 			_Xkp1.normalizeP();
 
@@ -208,7 +223,7 @@ class KalmanTracker
 				const Mat& image,
 				const Mat& K,
 				PatchesVector& p,
-				KeyPointsVector& matches,
+				matchesList& matches,
 				int& NrMatches,
 				bool draw,
 				Mat& imageWithMatches
@@ -257,7 +272,7 @@ class KalmanTracker
 			Matrix<dataType,3,3> Jac_t = -_Xkp1.Rot();
 
 			Matrix<dataType,13,13> Pt;
-			Pt = _Xkp1.P;
+			Pt = _Xkp1.P.transpose();
 			Matrix<dataType,7,7> P_blocks;
 			P_blocks.block<3,3>(0,0)=Pt.block<3,3>(tx,tx);
 			P_blocks.block<3,4>(0,3)=Pt.block<3,4>(tx,q0);
@@ -286,11 +301,18 @@ class KalmanTracker
 
 				//std::cout<<r<<std::endl;
 				// 0000000000000000000000000000000000000000000000000000000000
-				Uncertainity = r*P_blocks*r.transpose()+Matrix2f::Identity();
+				Uncertainity = r*P_blocks*r.transpose() +Matrix2f::Identity();
+
+				Vector2d eigenValues;
+				Matrix2d eigenVectors;
+				double theta;
+
+				solve_eig(Uncertainity,eigenValues,eigenVectors,theta);
+
 				if (show) std::cout<<Uncertainity<<std::endl;
 
-				float xReg = 3.0* sqrt(Uncertainity(0,0));
-				float yReg = 3.0* sqrt(Uncertainity(1,1));
+				float xReg = 2.0* sqrt(Uncertainity(0,0));
+				float yReg = 2.0* sqrt(Uncertainity(1,1));
 
 				if (show) std::cerr<<"SearchRegion : ["<<xReg<<","<<yReg<<"]"<<std::endl;
 
@@ -300,9 +322,7 @@ class KalmanTracker
 
 				if (show)  std::cerr<<"Prediction : \n"<<m<<std::endl;
 
-				if(draw) rectangle(imageWithMatches,Rect(m(0)-1,m(1)-1,3,3),0);
-
-				//std::cout<<m<<std::endl;
+								//std::cout<<m<<std::endl;
 
 				float xOrigin = (m(0) - xReg/2);
 				float yOrigin = (m(1) - yReg/2) ;
@@ -311,7 +331,7 @@ class KalmanTracker
 
 				if(	(xOrigin < 0 || yOrigin < 0) ||
 					(xOrigin > image.cols || yOrigin > image.rows) ||
-					(xOrigin + xReg > image.cols|| yOrigin+ yReg > image.rows )
+					((xOrigin + xReg) > image.cols|| (yOrigin+ yReg) > image.rows )
 					)
 				{
 					if (show) std::cerr<<"Skipped "<<std::endl;
@@ -321,11 +341,12 @@ class KalmanTracker
 					continue;
 				}
 
+
 				if (show) std::cerr<<"Image Dims : "<<image.rows << " , "<<image.cols<<std::endl;
 				if (show) std::cerr<<"Limits : "<<xOrigin+xReg<<" , "<<yOrigin+yReg<<std::endl;
 				res.setTo(-1);
 				Rect searchRegion(xOrigin,yOrigin,xReg,yReg);
-				//if(draw) rectangle(imageWithMatches,searchRegion,255,1);
+				if(draw) rectangle(imageWithMatches,searchRegion,255,1);
 				//imshow("mat",Mat(image,Rect(xOrigin,yOrigin,xReg,yReg)));
 				//imshow("template",iter->texture);
 				//cvWaitKey();
@@ -336,34 +357,39 @@ class KalmanTracker
 
 				if(maxVal>MATCHING_THRESHOLD){
 					if(PATCH_HEIGHT > xReg )
-						measured << xOrigin + maxLoc.x + xReg/2, yOrigin + maxLoc.y + yReg/2 ;
+						measured << xOrigin + maxLoc.x - PATCH_WIDTH/2, yOrigin + maxLoc.y - PATCH_WIDTH/2 ;
 					else
-						measured << xOrigin + maxLoc.x + (int)PATCH_WIDTH/2, yOrigin + maxLoc.y + (int)PATCH_HEIGHT/2 ;
+						measured << int(xOrigin + maxLoc.x + PATCH_WIDTH/2), int(yOrigin + maxLoc.y + PATCH_HEIGHT/2) ;
 					if(draw) {
+						rectangle(imageWithMatches,Rect(m(0)-1,m(1)-1,3,3),0);
+						ellipse(imageWithMatches,Point(m(0),m(1)),cvSize(sqrt(eigenValues(0))*2,sqrt(eigenValues(1))*2),theta,0,360,1);
 						rectangle(imageWithMatches,Rect(measured(0)-1,measured(1)-1,3,3),255);
 						line(imageWithMatches,Point(m(0),m(1)),Point(measured(0),measured(1)),0);
 					}
 
-					Z.block<2,1>(2*nmatches,0) =  measured - m;
+					Z.block<2,1>(2*nmatches,0) =  (measured - m);
 
-					if (show) std::cout<<"Measured"<<std::endl;
+					//iter->texture = Mat(image,Rect(measured(0),measured(1),PATCH_WIDTH,PATCH_HEIGHT)-Point(PATCH_WIDTH/2,PATCH_HEIGHT/2));
+
+					if (show) std::cout<<"Correction"<<std::endl;
 					if (show) std::cout<<Z.block<2,1>(2*nmatches,0)<<std::endl;
-
-					//std::cin.get();
 
 					H.block<2,3>(2*nmatches,tx)= r.block<2,3>(0,0);
 					H.block<2,4>(2*nmatches,q0)= r.block<2,4>(0,3);
 					nmatches++;
-					iter->uvd.x = measured(0); iter->uvd.y = measured(1);
-					KeyPoint kp(Point2f(measured(0),measured(1)),1,1,1,1,1);
-					matches.insert(matches.end(),kp);
+
+					match thisMatch;
+					thisMatch.pointidx = i;
+					thisMatch.u = measured(0);
+					thisMatch.v = measured(1);
+					matches.insert(matches.end(),thisMatch);
 				}
 			}
 			_Z = Z.topRows(2*nmatches);
 			_H = H.topRows(2*nmatches);
 			_R = MatrixXf(2*nmatches,2*nmatches);
 			_R.setIdentity();
-			_R*=10;
+			_R = _R*1000;
 			NrMatches = nmatches;
 
 		}

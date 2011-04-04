@@ -18,11 +18,19 @@ using namespace std;
 
 #define Vector3t Matrix<dataType,3,1>
 
+struct PerPointCameraList
+{
+	int cameraID;
+	dataType u;
+	dataType v;
+};
+
 
 class point3{
 public:
 	Vector3t xyz;
 	int ID;
+	std::vector<PerPointCameraList> cameraList;
 	point3(Vector3t v, int id){
 		xyz = v;
 		ID = id;
@@ -36,19 +44,6 @@ public:
 
 #define GlobalPointList std::vector<point3>
 
-
-struct PerPointCameraList
-{
-	int cameraID;
-	dataType u;
-	dataType v;
-};
-
-struct CamerasbyPoints
-{
-	int pointID;
-	std::vector<PerPointCameraList> cameraList;
-};
 
 class Kamera
 {
