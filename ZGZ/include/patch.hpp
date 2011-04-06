@@ -29,6 +29,8 @@ public:
 	cv::Mat texture;
 	unsigned int sourceKF;
 	std::vector<patchSupport> supportList;
+	//!@TODO : Implement the affine transformation for patches.
+	//cv::Mat transformAffine();
 };
 
 struct match

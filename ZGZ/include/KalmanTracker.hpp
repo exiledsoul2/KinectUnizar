@@ -311,8 +311,8 @@ class KalmanTracker
 
 				if (show) std::cout<<Uncertainity<<std::endl;
 
-				float xReg = 2.0* sqrt(Uncertainity(0,0));
-				float yReg = 2.0* sqrt(Uncertainity(1,1));
+				float xReg = (RESTRICT_SEARCH)? SEARCH_AREA : 3.0* sqrt(Uncertainity(0,0));
+				float yReg = (RESTRICT_SEARCH)? SEARCH_AREA : 3.0* sqrt(Uncertainity(1,1));
 
 				if (show) std::cerr<<"SearchRegion : ["<<xReg<<","<<yReg<<"]"<<std::endl;
 

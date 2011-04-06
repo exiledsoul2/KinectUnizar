@@ -24,8 +24,8 @@ namespace ZGZ
 		ZGZ_OK = 0,
 	}ZGZ_RETURN_STATUS;
 
-#define PATCH_WIDTH 11
-#define PATCH_HEIGHT 11
+#define PATCH_WIDTH 15
+#define PATCH_HEIGHT 15
 
 #define IMAGE_COLS 640
 #define IMAGE_ROWS 480
@@ -36,9 +36,9 @@ namespace ZGZ
 #define MATCHING_METHOD CV_TM_CCORR_NORMED
 
 #define MATCHING_THRESHOLD .99
-#define DETECTOR_THRESHOLD 60
+#define DETECTOR_THRESHOLD 1500
 
-#define MIN_MATCHES_THRESHOLD 84
+#define MIN_MATCHES_THRESHOLD 50
 
 #define IMG_ROWS 	480
 #define IMG_COLS	640
@@ -47,6 +47,8 @@ namespace ZGZ
 #define TS (1.0/30.0)
 #define W_EPS 1e-15
 
+#define RESTRICT_SEARCH 1
+#define SEARCH_AREA 70
 
 
 }

@@ -13,7 +13,7 @@
 
 using namespace ZGZ::zcv;
 
-#define DATASET_PATH "/home/yasir/CODE/KinectUnizar/KinectCapture/Debug/translation/"
+#define DATASET_PATH "/home/yasir/CODE/KinectUnizar/KinectCapture/Debug/translation_aligned/"
 
 void initTracker(Tracker& tracker)
 {
@@ -27,8 +27,8 @@ void initTracker(Tracker& tracker)
 
 	// Model Noise covariance
 	tracker.Q().setZero();
-	tracker.Q().block<3,3>(vx,vx) = I3*9;
-	tracker.Q().block<3,3>(wx,wx) = I3*9;
+	tracker.Q().block<3,3>(vx,vx) = I3;
+	tracker.Q().block<3,3>(wx,wx) = I3;
 	// The measurement Noise covariance depends on the measurement. init later
 }
 

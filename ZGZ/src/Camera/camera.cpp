@@ -33,7 +33,7 @@ bool camera::isCalibrated(){
 
 void camera::fastFeatureDetector(int threshold, int nonMaximalSuppression){
 	if(_ffd==NULL)
-		_ffd = new GridAdaptedFeatureDetector( new SurfFeatureDetector(1500),400,10,10);
+		_ffd = new GridAdaptedFeatureDetector( new SurfFeatureDetector(threshold),100,5,5);
 		//_ffd = new FastFeatureDetector(threshold,nonMaximalSuppression);
 	else{
 		delete _ffd;
