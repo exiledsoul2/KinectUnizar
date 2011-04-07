@@ -47,6 +47,10 @@
 #include <opencv2/opencv.hpp>
 #include <queue>
 
+#include "openni_exception.h"
+#include "openni_image.h"
+#include "openni_image_bayer_grbg.h"
+
 #define SAMPLE_XML_PATH "./SamplesConfig.xml"
 
 #define CHECK_RC(rc, what)											\
@@ -173,6 +177,8 @@ int main(int argc,char *argv[])
 	nRetVal = context.FindExistingNode(XN_NODE_TYPE_IMAGE, image);
 	CHECK_RC(nRetVal, "Find image generator");
 
+	image.SetPixelFormat(XN_PIXEL_FORMAT_GRAYSCALE_8_BIT);
+
 	XnFPSData xnFPS;
 	nRetVal = xnFPSInit(&xnFPS, 180);
 	CHECK_RC(nRetVal, "FPS Init");
@@ -195,9 +201,9 @@ int main(int argc,char *argv[])
 		CHECK_RC(nRetVal," Set viewpoint");
 	}
 
-	CvFileStorage * fs = cvOpenFileStorage("calibration_rgb.yaml",0,CV_STORAGE_READ);
-	CvMat * cameraMatrix = (CvMat *)cvReadByName(fs,0,"camera_matrix");
-	CvMat * distortionCoeffs = (CvMat *)cvReadByName(fs,0,"distortion_coefficients");
+	//CvFileStorage * fs = cvOpenFileStorage("calibration_rgb.yaml",0,CV_STORAGE_READ);
+	//CvMat * cameraMatrix = (CvMat *)cvReadByName(fs,0,"camera_matrix");
+	//CvMat * distortionCoeffs = (CvMat *)cvReadByName(fs,0,"distortion_coefficients");
 
 	static IplImage *img = 0;
 	if (!img) img = cvCreateImageHeader(cvSize(640,480), 8, 3);
@@ -222,26 +228,35 @@ int main(int argc,char *argv[])
 
 				data frame;
 				xnFPSMarkFrame(&xnFPS);
+
 				std::cout<<"New frame "<<std::endl;
 				depth.GetMetaData(depthMD);
 				image.GetMetaData(imageMD);
 
+				openni_wrapper::ImageBayerGRBG bayerDecoder(&imageMD,openni_wrapper::ImageBayerGRBG::EdgeAwareWeighted);
+				bayerDecoder.fillRGB(640,480,frame.rgb);
+
 				memcpy(frame.dep,depthMD.Data(),FRAME_SIZE_DEPTH);
-				memcpy(frame.rgb,imageMD.Data(),FRAME_SIZE_RGB);
+				//memcpy(frame.rgb,imageMD.Data(),FRAME_SIZE_RGB);
 				frame.frameNumber = depthMD.FrameID();
 
 				frames.push(frame);
 
-				cvSetData(img,frame.rgb, 640*3);
+				Mat im = Mat(Size(640,480),CV_8UC3,frame.rgb);
+
+				//im *=1./255.0;
+				Mat im2 = im;
+				cv::cvtColor(im,im2,CV_RGB2BGR);
+
 				cvSetData(dep,frame.dep, 640*2);
 				IplImage* depcvtd = cvCreateImage(cvSize(640,480),8,1);
 				cvConvertScale(dep,depcvtd, -255.0/10000.0,255);
 
-				IplImage * undistortedImg =cvCloneImage(img);
+				//IplImage * undistortedImg =cvCloneImage(img);
 
-				cvUndistort2(img,undistortedImg,cameraMatrix,distortionCoeffs);
+				//cvUndistort2(img,undistortedImg,cameraMatrix,distortionCoeffs);
 
-				imshow("RGB",undistortedImg);
+				imshow("RGB",im2);
 				imshow("Depth",depcvtd);
 				cvWaitKey(5);
 			}

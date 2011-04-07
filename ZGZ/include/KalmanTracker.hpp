@@ -229,9 +229,15 @@ class KalmanTracker
 				Mat& imageWithMatches
 				)
 		{
+			vector<Point2f> points1;
+			vector<Point2f> points2;
+			std::vector<match> tempMatches;
 			if(matches.size()>0) matches.clear();
 
-			if(draw) imageWithMatches = image.clone();
+			if(draw) {
+				//imageWithMatches = image.clone();
+				cvtColor(image,imageWithMatches,CV_GRAY2RGB);
+			}
 
 			PatchesVector::iterator iter;
 
@@ -338,6 +344,7 @@ class KalmanTracker
 					//p.erase(p.begin()+i);
 					//if (show) std::cout<<"Now Size : "<<p.size()<<std::endl;
 					//iter--;
+					if(draw) rectangle(imageWithMatches,Rect(m(0)-1,m(1)-1,3,3),CV_RGB(255,0,0));
 					continue;
 				}
 
@@ -346,7 +353,7 @@ class KalmanTracker
 				if (show) std::cerr<<"Limits : "<<xOrigin+xReg<<" , "<<yOrigin+yReg<<std::endl;
 				res.setTo(-1);
 				Rect searchRegion(xOrigin,yOrigin,xReg,yReg);
-				if(draw) rectangle(imageWithMatches,searchRegion,255,1);
+				//if(draw) rectangle(imageWithMatches,searchRegion,CV_RGB(255,0,0),1);
 				//imshow("mat",Mat(image,Rect(xOrigin,yOrigin,xReg,yReg)));
 				//imshow("template",iter->texture);
 				//cvWaitKey();
@@ -360,12 +367,9 @@ class KalmanTracker
 						measured << xOrigin + maxLoc.x - PATCH_WIDTH/2, yOrigin + maxLoc.y - PATCH_WIDTH/2 ;
 					else
 						measured << int(xOrigin + maxLoc.x + PATCH_WIDTH/2), int(yOrigin + maxLoc.y + PATCH_HEIGHT/2) ;
-					if(draw) {
-						rectangle(imageWithMatches,Rect(m(0)-1,m(1)-1,3,3),0);
-						ellipse(imageWithMatches,Point(m(0),m(1)),cvSize(sqrt(eigenValues(0))*2,sqrt(eigenValues(1))*2),theta,0,360,1);
-						rectangle(imageWithMatches,Rect(measured(0)-1,measured(1)-1,3,3),255);
-						line(imageWithMatches,Point(m(0),m(1)),Point(measured(0),measured(1)),0);
-					}
+
+					points1.push_back(Point2f(iter->uvd.x,iter->uvd.y));
+					points2.push_back(Point2f(measured(0),measured(1)));
 
 					Z.block<2,1>(2*nmatches,0) =  (measured - m);
 
@@ -382,14 +386,57 @@ class KalmanTracker
 					thisMatch.pointidx = i;
 					thisMatch.u = measured(0);
 					thisMatch.v = measured(1);
-					matches.insert(matches.end(),thisMatch);
+					tempMatches.insert(tempMatches.end(),thisMatch);
+				}
+				else
+				{
+					if(draw) rectangle(imageWithMatches,Rect(m(0)-1,m(1)-1,3,3),CV_RGB(255,0,0));
 				}
 			}
-			_Z = Z.topRows(2*nmatches);
-			_H = H.topRows(2*nmatches);
-			_R = MatrixXf(2*nmatches,2*nmatches);
+
+			std::vector<uchar> status;
+
+			findFundamentalMat(Mat(points1),Mat(points2),status,CV_FM_RANSAC,2.0,0.99);
+			int idx;
+			int inlierCount = 0;
+			std::vector<uchar>::iterator statusiter;
+
+			_Z = VectorXf(status.size()*2);
+			_H = MatrixXf(status.size()*2,H.cols());
+
+			for(idx=0,statusiter = status.begin();statusiter!=status.end(); statusiter++,idx++)
+			{
+				if(*statusiter>0) // is inlier
+				{
+					_Z(2*inlierCount) = Z(2*idx);
+					_Z(2*inlierCount+1) = Z(2*idx+1);
+
+					_H.row(2*inlierCount) = H.row(2*idx);
+					_H.row(2*inlierCount+1) = H.row(2*idx+1);
+
+					inlierCount++;
+					if(draw) {
+						//ellipse(imageWithMatches,Point(m(0),m(1)),cvSize(sqrt(eigenValues(0))*2,sqrt(eigenValues(1))*2),theta,0,360,1);
+						rectangle(imageWithMatches,Rect(tempMatches[idx].u,tempMatches[idx].v,PATCH_HEIGHT,PATCH_WIDTH)-Point(PATCH_HEIGHT/2,PATCH_WIDTH/2),CV_RGB(0,255,0));
+						//line(imageWithMatches,Point(m(0),m(1)),Point(measured(0),measured(1)),CV_RGB(0,255,0));
+						matches.push_back(tempMatches[idx]);
+					}
+
+				}
+				else{
+					if(draw)
+						rectangle(imageWithMatches,Rect(tempMatches[idx].u,tempMatches[idx].v,3,3)-Point(1,1),CV_RGB(0,0,255));
+				}
+
+			}
+
+			_Z = _Z.topRows(2*matches.size());
+			_H = _H.topRows(2*matches.size());
+
+
+			_R = MatrixXf(2*matches.size(),2*matches.size());
 			_R.setIdentity();
-			_R = _R*1000;
+			_R = _R*SEARCH_AREA*SEARCH_AREA*10;
 			NrMatches = nmatches;
 
 		}

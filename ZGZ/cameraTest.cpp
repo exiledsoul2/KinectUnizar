@@ -13,7 +13,7 @@
 
 using namespace ZGZ::zcv;
 
-#define DATASET_PATH "/home/yasir/CODE/KinectUnizar/KinectCapture/Debug/translation_aligned/"
+#define DATASET_PATH "/home/yasir/CODE/KinectUnizar/KinectCapture/Debug/desk/"
 
 void initTracker(Tracker& tracker)
 {
@@ -41,16 +41,19 @@ int main(int argc, char**argv)
 
 	initTracker(tracker);
 
-	int start;
-	if(argc<2){
-		std::cerr<<"Starting Image Miising"<<std::endl;
+	int start, end;
+	if(argc<3){
+		std::cerr<<"Starting and ending Image Miising"<<std::endl;
 		return -1;
 	}
 
-	else start = atoi(argv[1]);
+	else {
+		start = atoi(argv[1]);
+		end = atoi(argv[2]);
+	}
 
-	ImageSource imsrc(DATASET_PATH,	"",	"ppm",start,1100,4);
-	ImageSource depth(DATASET_PATH,	"",	"dep",start,1100,4);
+	ImageSource imsrc(DATASET_PATH,	"",	"ppm",start,end,4);
+	ImageSource depth(DATASET_PATH,	"",	"dep",start,end,4);
 
 	KeyPointsVector kpnts1,kpnts2;
 	std::vector<Patch> patchList1,patchList2;

@@ -83,6 +83,8 @@ void camera::extractPatches(
 		Vector3f xyz = R*toWorldXYZ(patch.uvd)+t;
 		patch.xyz = Point3d(xyz(0),xyz(1),xyz(2));
 		patch.texture = Mat(_currentImage, Rect(xOrigin,yOrigin,PATCH_WIDTH,PATCH_HEIGHT));
+		//patch.depth = Mat(_currentImage, Rect(yOrigin,xOrigin,PATCH_WIDTH,PATCH_HEIGHT));
+		patch.depth = patch.depth; // > The image is for some reason transposed
 		patch.sourceKF = keyFrameCount;
 		patch.supportList.insert(patch.supportList.end(),patchSupport(keyFrameCount,x,y));
 		patchList.insert(patchList.end(),patch);
