@@ -1,0 +1,5 @@
+1. Restrict the search area to a predifed number of pixels
+2. Affine transformation of patches as the camera moves 
+3. (Wishful) structure for all the different settings
+4. Move Patches into its own class so that functions like transformation can be called on each
+5. Organize the code into more a logical bunch .. so tat data sharing is easy
