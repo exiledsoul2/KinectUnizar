@@ -10,7 +10,7 @@
 #include <KalmanTracker.hpp>
 #include <keyframe.hpp>
 #include <patch.hpp>
-
+#include <settings.hpp>
 using namespace ZGZ::zcv;
 
 #define DATASET_PATH "/home/yasir/CODE/KinectUnizar/KinectCapture/Debug/desk/"
@@ -18,22 +18,24 @@ using namespace ZGZ::zcv;
 void initTracker(Tracker& tracker)
 {
 	//Initalizing the state vector and covariance
-	tracker.Xk().x << 0,0,0,0,0,0,1,0,0,0,W_EPS,W_EPS,W_EPS;
+	float w_eps = settings.tracker.w_eps;
+	tracker.Xk().x << 0,0,0,0,0,0,1,0,0,0,w_eps,w_eps,w_eps;
 	tracker.Xk().P.setZero();
 	//tracker.Xk().P.setIdentity();
-	tracker.Xk().P *= W_EPS;
-	//tracker.Xk().P.block(3,3,3,3) = I3*W_EPS;
-	tracker.Xk().P.bottomRightCorner(3,3)=I3*W_EPS;
+	tracker.Xk().P *= w_eps;
+	tracker.Xk().P.block(3,3,3,3) = I3*settings.tracker.v_eps;
+	tracker.Xk().P.bottomRightCorner(3,3)=I3*w_eps;
 
 	// Model Noise covariance
 	tracker.Q().setZero();
-	tracker.Q().block<3,3>(vx,vx) = I3;
-	tracker.Q().block<3,3>(wx,wx) = I3;
+	tracker.Q().block<3,3>(vx,vx) = I3*settings.tracker.linearVelocity;
+	tracker.Q().block<3,3>(wx,wx) = I3*settings.tracker.angularVelocity;
 	// The measurement Noise covariance depends on the measurement. init later
 }
 
 int main(int argc, char**argv)
 {
+	initSettings();
 	camera K;
 	Tracker tracker;
 	KeyFrameManager keyFrameManager;
@@ -117,7 +119,7 @@ int main(int argc, char**argv)
 
 	}
 
-	K.showMatches(patchList1,matches,"NEWpatches");
+	K.showMatches(patchList1,matches,"matches found");
 	cvWaitKey(10);
 	}
 	cvWaitKey();

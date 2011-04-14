@@ -11,6 +11,7 @@
 #include <iostream>
 #include <ZGZ.hpp>
 #include <patch.hpp>
+
 using namespace std;
 using namespace ZGZ::zEigen;
 using namespace ZGZ::zcv;
@@ -19,6 +20,8 @@ using namespace ZGZ::zcv;
 #define PatchesVector std::vector<Patch>
 
 using namespace ZGZ;
+
+
 class camera
 {
 	private:

@@ -13,6 +13,7 @@
 
 #include <opencv2/opencv.hpp>
 #include <utils/shortcuts.hpp>
+#include <settings.hpp>
 
 namespace ZGZ
 {
@@ -47,9 +48,12 @@ namespace ZGZ
 #define TS (1.0/30.0)
 #define W_EPS 1e-15
 
-#define RESTRICT_SEARCH 1
+#define RESTRICT_SEARCH 0
 #define SEARCH_AREA 50
 
+#define SHOW_ERROR_ELLIPSES 1
+
+#define PI 3.1415926535
 
 }
 #endif /* ZGZ_HPP_ */
