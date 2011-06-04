@@ -11,6 +11,7 @@
 #include <iostream>
 #include <ZGZ.hpp>
 #include <patch.hpp>
+#include <kdtree.hpp>
 
 using namespace std;
 using namespace ZGZ::zEigen;
@@ -87,8 +88,8 @@ class camera
 		 *@param nonMaximalSuppression
 		 */
 		void fastFeatureDetector(int threshold, int nonMaximalSuppression);
-		void detectPoints(KeyPointsVector&);
-		void extractPatches(KeyPointsVector, PatchesVector&, Matrix3f, Vector3f,unsigned int);
+		void detectPoints(KeyPointsVector&, const cv::Mat& = Mat());
+		void extractPatches(KeyPointsVector, PatchList&, Matrix3f, Vector3f,unsigned int,pKDTree&);
 		void undistortPoints(KeyPointsVector& k);
 		void showKeyPoints(const KeyPointsVector& k,std::string windowname);
 		Mat& currentImage();

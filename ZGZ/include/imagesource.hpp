@@ -26,20 +26,22 @@ class ImageSource
 	int _indexEnd;
 	int _nextIndex;
 	int _width;
+	int _step;
 	std::string _currentImagePath;
 public:
 	ImageSource(){
 
 	}
 
-	ImageSource(std::string path,std::string basename,std::string ext, int start, int end,int width=4):
+	ImageSource(std::string path,std::string basename,std::string ext, int start, int end,int step = 1, int width=4):
 		_path(path),
 		_basename(basename),
 		_ext(ext),
 		_indexStart(start),
 		_indexEnd(end),
 		_nextIndex(start),
-		_width(width)
+		_width(width),
+		_step(step)
 	{
 
 	}
@@ -64,7 +66,7 @@ public:
 		else	M = cv::imread(_currentImagePath,flags);
 		std::cout<<_currentImagePath<<std::endl;
 
-		_nextIndex++;
+		_nextIndex = _nextIndex + _step;
 	}
 	bool done()
 	{

@@ -8,8 +8,9 @@
 #include <ZGZ.hpp>
 #include <camera.hpp>
 #include <math.h>
-using namespace ZGZ::zcv;
-using namespace ZGZ::zEigen;
+#include <settings.hpp>
+using namespace ZGZ;
+
 ZGZ::ZGZ_RETURN_STATUS camera::readCalibration(std::string filename, const string nameK, const string namek1)
 {
 	FileStorage fs;
@@ -33,18 +34,33 @@ bool camera::isCalibrated(){
 
 void camera::fastFeatureDetector(int threshold, int nonMaximalSuppression){
 	if(_ffd==NULL)
-		_ffd = new GridAdaptedFeatureDetector( new SurfFeatureDetector(threshold),100,5,5);
+		if(options.detector.gridAdapted){
+			_ffd = new GridAdaptedFeatureDetector(
+					//new GoodFeaturesToTrackDetector(1,0.5,1,7),
+					new SurfFeatureDetector(200,3,4),
+					//new FastFeatureDetector(30,1),
+					options.detector.maxNumFeatures,
+					options.detector.gridRows,
+					options.detector.gridCols
+					);
+		}
+		else
+		{
+			_ffd = new GoodFeaturesToTrackDetector(options.detector.maxNumFeatures,0.10,5,9);
+		}
+
 		//_ffd = new FastFeatureDetector(threshold,nonMaximalSuppression);
 	else{
 		delete _ffd;
-		_ffd = new FastFeatureDetector(threshold,nonMaximalSuppression);
+		_ffd = NULL;
+		FastFeatureDetector(threshold,nonMaximalSuppression);
 	}
 
 }
 
-void camera::detectPoints(KeyPointsVector& k){
+void camera::detectPoints(KeyPointsVector& k, const Mat& mask){
 	if(_ffd)
-		_ffd->detect(_currentImage,k);
+		_ffd->detect(_currentImage,k,mask);
 	else
 		std::cerr<<"ERROR : Fast Feature Detector is uninitialized";
 
@@ -52,24 +68,25 @@ void camera::detectPoints(KeyPointsVector& k){
 
 void camera::extractPatches(
 		KeyPointsVector K,
-		std::vector<Patch>& patchList,
+		PatchList& patchList,
 		Matrix3f R,
 		Vector3f t,
-		unsigned int keyFrameCount
+		unsigned int keyFrameCount,
+		pKDTree& kdtree
 		){
 	std::vector<KeyPoint>::iterator iter;
-	//if(patchList.size()>0) patchList.clear();
 
+	int patchSize = PATCH_HEIGHT;
 	for(iter = K.begin();iter != K.end(); iter++)
 	{
 		int x = iter->pt.x;
 		int y = iter->pt.y;
-		int xOrigin = x - (PATCH_HEIGHT-1)/2;
-		int yOrigin = y - (PATCH_WIDTH -1)/2;
+		int xOrigin = x - (patchSize-1)/2;
+		int yOrigin = y - (patchSize -1)/2;
 
 		// Check if a valid patch can be extracted
 		if(xOrigin < 0 || yOrigin < 0) continue;
-		if((xOrigin+PATCH_WIDTH)>IMAGE_COLS ||(yOrigin+PATCH_HEIGHT)>IMAGE_ROWS) continue;
+		if((xOrigin+patchSize)>IMAGE_COLS ||(yOrigin+patchSize)>IMAGE_ROWS) continue;
 
 		// Check if we have valid depth for the current point
 		float depth = _currentDepth.at<unsigned short int>(y,x);
@@ -78,17 +95,43 @@ void camera::extractPatches(
 		//if all went well . create the patch and use it.
 
 
+		/*********************************************************************************/
+		/*							PATCH RELATED STUFF									**/
+		/*********************************************************************************/
+
 		Patch patch;
 		patch.uvd = Point3d(x,y,depth/1000);
 		Vector3f xyz = R*toWorldXYZ(patch.uvd)+t;
+
+
+
+		Vector3f TL = R*toWorldXYZ(Point3d(x-patchSize/2,y-patchSize/2,depth/1000))+t;
+		Vector3f TR = R*toWorldXYZ(Point3d(x+patchSize/2,y-patchSize/2,depth/1000))+t;
+		Vector3f BL = R*toWorldXYZ(Point3d(x-patchSize/2,y+patchSize/2,depth/1000))+t;
+		Vector3f BR = R*toWorldXYZ(Point3d(x+patchSize/2,y+patchSize/2,depth/1000))+t;
+
 		patch.xyz = Point3d(xyz(0),xyz(1),xyz(2));
-		patch.texture = Mat(_currentImage, Rect(xOrigin,yOrigin,PATCH_WIDTH,PATCH_HEIGHT));
+		Point3d NN;
+
+		if(options.detector.kdtreeCheck)
+		{
+			if(kdtree.insert(patch.xyz,options.detector.kdtreeThresh,NN))
+				continue;
+		}
+
+		patch.cornersXYZ.push_back(Point3d(TL(0),TL(1),TL(2)));
+		patch.cornersXYZ.push_back(Point3d(TR(0),TR(1),TR(2)));
+		patch.cornersXYZ.push_back(Point3d(BL(0),BL(1),BL(2)));
+		patch.cornersXYZ.push_back(Point3d(BR(0),BR(1),BR(2)));
+
+		patch.texture = Mat(_currentImage, Rect(xOrigin,yOrigin,patchSize,patchSize));
 		//patch.depth = Mat(_currentImage, Rect(yOrigin,xOrigin,PATCH_WIDTH,PATCH_HEIGHT));
 		patch.depth = patch.depth; // > The image is for some reason transposed
 		patch.sourceKF = keyFrameCount;
 		patch.supportList.insert(patch.supportList.end(),patchSupport(keyFrameCount,x,y));
-		patchList.insert(patchList.end(),patch);
+		patchList.push_back(patch);
 
+		/*********************************************************************************/
 	}
 }
 void camera::undistortPoints(KeyPointsVector& k){
@@ -173,13 +216,13 @@ Vector3f camera::toWorldXYZ(Point3d uvd){
 
 	double X = uvd.x;
 	double Y = uvd.y;
-	const double depth = uvd.z;
+	double depth = uvd.z;
 	float x = float((X - cx_d) *fx_d);
 	float y = float((Y - cy_d) *fy_d);
 	float z = 1;
 
 	Vector3f v(x,y,z);
-	v.normalize();
+	//v.normalize();
 	return v*depth;
 }
 
@@ -204,9 +247,6 @@ void camera::addSupport(PatchesVector& p, matchesList& matches, unsigned int key
 	matchesList::iterator mIter;
 	foralliter(mIter,matches)
 	{
-
-		p[(mIter->pointidx)].supportList.insert(
-				p[(mIter->pointidx)].supportList.begin(),
-				patchSupport(keyFrameID,mIter->u,mIter->v));
+		p[(mIter->pointidx)].supportList.push_back(patchSupport(keyFrameID,mIter->u,mIter->v));
 	}
 }

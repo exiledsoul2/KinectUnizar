@@ -11,37 +11,35 @@
 #include <keyframe.hpp>
 #include <patch.hpp>
 #include <settings.hpp>
-using namespace ZGZ::zcv;
+#include <kdtree.hpp>
 
-#define DATASET_PATH "/home/yasir/CODE/KinectUnizar/KinectCapture/Debug/desk/"
+#include <osgdisplay.hpp>
 
-void initTracker(Tracker& tracker)
-{
-	//Initalizing the state vector and covariance
-	float w_eps = settings.tracker.w_eps;
-	tracker.Xk().x << 0,0,0,0,0,0,1,0,0,0,w_eps,w_eps,w_eps;
-	tracker.Xk().P.setZero();
-	//tracker.Xk().P.setIdentity();
-	tracker.Xk().P *= w_eps;
-	tracker.Xk().P.block(3,3,3,3) = I3*settings.tracker.v_eps;
-	tracker.Xk().P.bottomRightCorner(3,3)=I3*w_eps;
+//using namespace ZGZ::zcv;
 
-	// Model Noise covariance
-	tracker.Q().setZero();
-	tracker.Q().block<3,3>(vx,vx) = I3*settings.tracker.linearVelocity;
-	tracker.Q().block<3,3>(wx,wx) = I3*settings.tracker.angularVelocity;
-	// The measurement Noise covariance depends on the measurement. init later
-}
+//#define DATASET_PATH "/home/yasir/CODE/KinectUnizar/KinectCapture/Debug/datasets/shelf/"
+#define DATASET_PATH "/home/yasir/CODE/KinectUnizar/KinectCapture/Debug/walls/"
+//#define DATASET_PATH "/home/yasir/CODE/KinectUnizar/KinectCapture/Debug/checkerboard/"
+//initSettings(options);
+
+Settings options;
+
+
 
 int main(int argc, char**argv)
 {
-	initSettings();
+	pKDTree kDtree;
+
 	camera K;
 	Tracker tracker;
 	KeyFrameManager keyFrameManager;
 	matchesList matches;
 
-	initTracker(tracker);
+	osgDisplay disp3d;
+
+	initSettings(options);
+	tracker.init();
+
 
 	int start, end;
 	if(argc<3){
@@ -54,13 +52,18 @@ int main(int argc, char**argv)
 		end = atoi(argv[2]);
 	}
 
-	ImageSource imsrc(DATASET_PATH,	"",	"ppm",start,end,4);
-	ImageSource depth(DATASET_PATH,	"",	"dep",start,end,4);
+
+	ImageSource imsrc(DATASET_PATH,	"",	"ppm",start,end,1,4);
+	ImageSource depth(DATASET_PATH,	"",	"dep",start,end,1,4);
 
 	KeyPointsVector kpnts1,kpnts2;
-	std::vector<Patch> patchList1,patchList2;
+
+	PatchList gPatchList,temp;
+
+
 	K.fastFeatureDetector(DETECTOR_THRESHOLD,1);
-	if(K.readCalibration("./calibration2.yml","rgb_intrinsics","rgb_distortion")==ZGZ_ERROR){
+
+	if(K.readCalibration("./calibration_rgb2.yaml","camera_matrix","distortion_coefficients")==ZGZ_ERROR){
 		std::cerr<<"Unable to read calibration params"<<std::endl;
 		return -1;
 	}
@@ -68,6 +71,7 @@ int main(int argc, char**argv)
 	int nMatches;
 	Mat dummy;
 	Mat CameraK = K.K();
+	//Mat detectorMask;
 
 	imsrc.getNextImage(K.currentImage());
 	depth.getNextImage(K.currentDepth());
@@ -76,13 +80,15 @@ int main(int argc, char**argv)
 	// the ground truth points. (uv may change, but XYZ will not)
 
 	K.detectPoints(kpnts1);
-	K.extractPatches(kpnts1,patchList1,tracker.Xk().Rot(),tracker.Xk().t(),keyFrameManager.currentKeyFrameId());
+	K.extractPatches(kpnts1,gPatchList,tracker.Xk().Rot(),tracker.Xk().t(),keyFrameManager.currentKeyFrameId(),kDtree);
+
+	std::cerr<<"First frame : Points  "<<gPatchList.size()<<std::endl;
 
 	keyFrameManager.addKeyFrame(K.currentImage(),K.currentDepth(),tracker.Xk());
 
 	while(!imsrc.done()){
 
-	std::cerr<<"Current number of patches : "<<patchList1.size()<<std::endl;
+	std::cerr<<"Current number of patches : "<<gPatchList.size()<<std::endl;
 
 	tracker.predict();
 
@@ -90,38 +96,43 @@ int main(int argc, char**argv)
 	depth.getNextImage(K.currentDepth());
 
 	matches.clear();
-	tracker.findMatches(K.currentImage(),CameraK,patchList1,matches,nMatches,true,dummy);
-	tracker.update();
+
+	tracker.findMatches(K.currentImage(),K.currentDepth(),CameraK,gPatchList,matches,nMatches,true,dummy);//,detectorMask);
+
+	//imshow("detectorMask",detectorMask);
+
+	//if(matches.size()>= MIN_MATCHES_THRESHOLD)
+	//	tracker.update();
+	//	continue;
+
+
 
 	std::cout<<tracker.Xk().x<<std::endl;
 	std::cout<<tracker.Xk().P<<std::endl;
 
 	std::cout<<"Found "<<nMatches<<" matches"<<std::endl;
-	std::cout<<"Keypoints retained "<<kpnts2.size()<< " used for next Image"<<std::endl;
+
 	imshow("Predictions&Matches",dummy);
 
 	if(nMatches<MIN_MATCHES_THRESHOLD)
 	{
-		K.addSupport(patchList1,matches,keyFrameManager.currentKeyFrameId());
+		K.addSupport(gPatchList,matches,keyFrameManager.currentKeyFrameId());
 		kpnts2.clear();
+		//gPatchList.clear();
 		K.detectPoints(kpnts2);
 		keyFrameManager.addKeyFrame(K.currentImage(),K.currentDepth(),tracker.Xk());
-		K.extractPatches(kpnts2,patchList1,tracker.Xk().Rot(),tracker.Xk().t(),keyFrameManager.currentKeyFrameId());
+		K.extractPatches(kpnts2,gPatchList,tracker.Xk().Rot(),tracker.Xk().t(),keyFrameManager.currentKeyFrameId(),kDtree);
 		K.showPatchesOnImage(kpnts2,"points in new KeyFrame");
-
-		//waitKey();
 	}
 	else
 	{
-		//K.extractPatches(kpnts2,patchList2,tracker.Xk().Rot(),tracker.Xk().t());
-		//patchList1 = patchList2;
-		//patchList2.clear();
-
 	}
 
-	K.showMatches(patchList1,matches,"matches found");
-	cvWaitKey(10);
+	K.showMatches(gPatchList,matches,"matches found");
+    disp3d.display(gPatchList, tracker.Xk().x);
+	cvWaitKey();
 	}
+	disp3d.loop();
 	cvWaitKey();
 
 }

@@ -1,12 +1,6 @@
-/*
- * settings.hpp
- *
- *  Created on: Apr 12, 2011
- *      Author: yasir
- */
+#ifndef __SETTINGS_HPP_
+#define __SETTINGS_HPP_
 
-#ifndef SETTINGS_HPP_
-#define SETTINGS_HPP_
 enum DetectionMethod{
 	HarrisCorners = 0,	//!< Harris Corner Detector
 	FastCorners,		//!< FAST Corner Detector
@@ -28,45 +22,50 @@ struct TrackerSettings{
 	float w_eps;								//<! Initial error in angular Velocity
 	float v_eps;								//<! Initial error in linear Velocity
 	float measurementUncertanity;				//<! Measurement Noise (R)
+};
+
+struct MatchingSettings{
+	bool restrictedSearch;					//! Restrict search to @searchArea
+	int  searchArea;						//! search area in case of @restrictedSearch
+	int  patchSize;							//! size of Texture patch extracted
+	bool affineTransfrom;					//! Whether to affine transform the patch or not
+	bool fundamentalCheck;					//! Fundamental check for detecting outliers
 
 
 };
 
 struct DetectorSettings{
-	int maxNumFeatures;						//<! The max number of features we want;
-	DetectionMethod detectionMethod;		//<! One of DetectionMethod s
-	int thershold;							//<! Appropriate Threshold for the detector
-	int nonMaximalSuppression;				//<! nonMaximal suppression (FAST CORNERS ONLY)
-	bool gridAdapted;						//<! Divides the image into a grid and then detect?
-	int gridRows;							//<! Bins in the X directions
-	int gridCols;							//<! Bins in the Y directions
+	int maxNumFeatures;						//!< The max number of features we want;
+	DetectionMethod detectionMethod;		//!< One of DetectionMethod s
+	int thershold;							//!< Appropriate Threshold for the detector
+	int nonMaximalSuppression;				//!< nonMaximal suppression (FAST CORNERS ONLY)
+	bool gridAdapted;						//!< Divides the image into a grid and then detect?
+	int gridRows;							//!< Bins in the X directions
+	int gridCols;							//!< Bins in the Y directions
+	bool kdtreeCheck;						//!< Distance check using kd-tree
+	float kdtreeThresh;						//!< Threshold for above distance check
 
 };
 
-struct Settings{
+struct DisplaySettings{
+	bool all;
+	bool uncertainityEllipses;
+	bool predictions;
+	bool matches;
+	bool searchRegion;
+	bool pointsNotSeen;						//<! Show map point not predicted in the current  frame
+};
+
+class Settings{
+public:
 	TrackerSettings tracker;
 	DetectorSettings detector;
+	MatchingSettings matching;
+	DisplaySettings display;
 };
 
-static Settings settings;
+extern Settings options;
 
-static void initSettings()
-{
-	settings.tracker.angularVelocity 		= 1;
-	settings.tracker.linearVelocity 		= 1;
-	settings.tracker.associationMethod 		= NN;
-	settings.tracker.w_eps 					= 1e-15;
-	settings.tracker.v_eps 					= 0;
-	settings.tracker.measurementUncertanity = 2;
-
-	settings.detector.detectionMethod 		= FastCorners;
-	settings.detector.gridAdapted 			= true;
-	settings.detector.gridRows 				= 5;
-	settings.detector.gridCols 				= 5;
-	settings.detector.maxNumFeatures		= 1000;
-	settings.detector.nonMaximalSuppression = true;
-
-
-}
+void initSettings(Settings& options);
 
 #endif /* SETTINGS_HPP_ */

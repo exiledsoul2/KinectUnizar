@@ -14,7 +14,7 @@
 using namespace Eigen;
 #define tolerance 0.1e-20
 
-#define square(x) x*x
+#define _square(x) x*x
 
 void solve_eig(Matrix2f& P,Vector2d& lambda, Matrix2d& v, double& theeta)
     //double* lambda1, double *v1x, double*v1y,
@@ -35,11 +35,11 @@ void solve_eig(Matrix2f& P,Vector2d& lambda, Matrix2d& v, double& theeta)
 
     double tr = A + D;
     double det = A * D - B * C;
-    double S = sqrt( square(tr/2) - det );
+    double S = sqrt( _square(tr/2) - det );
     lambda(0) = tr/2 + S;
     lambda(1) = tr/2 - S;
 
-    double SS = sqrt( max(square((A-D)/2) + B * C, 0.0) );
+    double SS = sqrt( max(_square((A-D)/2) + B * C, 0.0) );
     if( A - D < 0 ) {
         v(0,0) = C;
         v(1,0) = - (A-D)/2 + SS;

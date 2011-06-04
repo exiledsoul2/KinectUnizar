@@ -13,7 +13,7 @@
 
 #include <opencv2/opencv.hpp>
 #include <utils/shortcuts.hpp>
-#include <settings.hpp>
+
 
 namespace ZGZ
 {
@@ -36,7 +36,7 @@ namespace ZGZ
 
 #define MATCHING_METHOD CV_TM_CCORR_NORMED
 
-#define MATCHING_THRESHOLD .95
+#define MATCHING_THRESHOLD .8
 #define DETECTOR_THRESHOLD 100
 
 #define MIN_MATCHES_THRESHOLD 50
@@ -44,16 +44,9 @@ namespace ZGZ
 #define IMG_ROWS 	480
 #define IMG_COLS	640
 
-#define dataType float	//!< Defines the primary datatype of the filter
+#define filterDataType float	//!< Defines the primary datatype of the filter
 #define TS (1.0/30.0)
 #define W_EPS 1e-15
 
-#define RESTRICT_SEARCH 0
-#define SEARCH_AREA 50
-
-#define SHOW_ERROR_ELLIPSES 1
-
-#define PI 3.1415926535
-
-}
+};
 #endif /* ZGZ_HPP_ */

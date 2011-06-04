@@ -211,7 +211,10 @@ int main(int argc,char *argv[])
 	static IplImage *dep = 0;
 	if(!dep) dep = cvCreateImageHeader(cvSize(640,480),16,1);
 
+	static IplImage* depcvtd = 0;
 
+	Mat im ;
+	Mat im2;
 	printf("Capture Started ...\n");
 
 	omp_set_num_threads(2);
@@ -242,14 +245,13 @@ int main(int argc,char *argv[])
 
 				frames.push(frame);
 
-				Mat im = Mat(Size(640,480),CV_8UC3,frame.rgb);
+				im = Mat(Size(640,480),CV_8UC3,frame.rgb);
 
-				//im *=1./255.0;
-				Mat im2 = im;
+				//im2 = im;
 				cv::cvtColor(im,im2,CV_RGB2BGR);
 
 				cvSetData(dep,frame.dep, 640*2);
-				IplImage* depcvtd = cvCreateImage(cvSize(640,480),8,1);
+				depcvtd = cvCreateImage(cvSize(640,480),8,1);
 				cvConvertScale(dep,depcvtd, -255.0/10000.0,255);
 
 				//IplImage * undistortedImg =cvCloneImage(img);

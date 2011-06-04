@@ -41,7 +41,7 @@ public:
 
 	Matrix3f Rot()
 	{
-		Quaternion<dataType> 	q(x(q0),x(q1),x(q2),x(q3));
+		Quaternion<filterDataType> 	q(x(q0),x(q1),x(q2),x(q3));
 		return q.toRotationMatrix();
 	}
 	void normalizeP()
@@ -54,36 +54,60 @@ public:
 			-z*r         -z*x         -z*y  r*r+x*x+y*y];
 		 */
 		Quaternion<float> q(x(q0),x(q1),x(q2),x(q3));
-		float norm = q.norm();
 
-
-
-
-		float r = q.w();
-		float qx = q.x();
-		float qy = q.y();
-		float qz = q.z();
+		float r = 	x(q0);
+		float qx = 	x(q1);
+		float qy = 	x(q2);
+		float qz = 	x(q3);
 
 		Matrix4f J;
-		J<< qx*qx+qy*qy+qz*qz,		-r*qx,         -r*qy,          -r*qz,
-				-qx*r,	 r*r+qy*qy+qz*qz,         -qx*qy,          -qx*qz,
-				-qy*r, 			-qy*qx,  r*r+qx*qx+qz*qz,          -qy*qz,
-				-qz*r,           -qz*qx,         -qz*qy,   r*r+qx*qx+qy*qy;
+		J<< qx*qx+qy*qy+qz*qz,		-r*qx,	         -r*qy,          -r*qz,
+				-qx*r,	 	r*r+qy*qy+qz*qz,         -qx*qy,          -qx*qz,
+				-qy*r, 				-qy*qx,  r*r+qx*qx+qz*qz,          -qy*qz,
+				-qz*r,           	-qz*qx,         -qz*qy,   r*r+qx*qx+qy*qy;
 
-		J*= 1.0/std::pow(norm*norm,double(1.5));;
+		J = J * (std::pow(r*r+qx*qx+qy*qy+qz*qz,double(-3/2)));
 
-		P.block(tx,q0,3,4)  *= J.transpose();
-		P.block(vx,q0,3,4)  *= J.transpose();
-		P.block(q0,q0,4,4)  *= J.transpose();
-		P.block(wx,q0,3,4) *= J.transpose();
+		//J.transposeInPlace();
+		/**
+		 * [ Ptt	Ptv 	Ptq*J'	 Ptw
+		 *   Pvt	Pvv 	Pvq*J'	 Pvw
+		 *   J*Pqt  J*Pqv   J*Pqq*J' J*Pqw
+		 *   Pwt	Pwv		Pwq*J'	 Pww	]
+		 */
 
-		P.block(q0,tx,4,6) = J* P.block(q0,tx,4,6);
-		P.block(q0,wx,4,3) = J* P.block(q0,wx,4,3);
+		P.block(tx,q0,3,4)  =  P.block(tx,q0,3,4) * J.transpose();
+		P.block(vx,q0,3,4)  =  P.block(vx,q0,3,4) * J.transpose();
+		//P.block(q0,q0,4,4)  *= J.transpose();
+		P.block(wx,q0,3,4) 	=  P.block(wx,q0,3,4) * J.transpose();
 
-		P.block(q0,q0,4,4) = J* P.block(q0,q0,4,4) * J.transpose();
+		P.block(q0,tx,4,3)  = J* P.block(q0,tx,4,3);
+		P.block(q0,vx,4,3)  = J* P.block(q0,vx,4,3);
+		P.block(q0,wx,4,3)  = J* P.block(q0,wx,4,3);
 
+		P.block(q0,q0,4,4)  = J* P.block(q0,q0,4,4) * J.transpose();
 
-		x.block(q0,0,4,1) /= norm;
+		x.block(q0,0,4,1) = x.block(q0,0,4,1) * (1/(std::pow(r*r+qx*qx+qy*qy+qz*qz,double(1/2))));
+
+	}
+
+	Matrix<filterDataType,3,4> FFq(Vector3f& p)
+	{
+		Matrix<filterDataType,4,3> Pi;
+		filterDataType a = x(q0);
+		filterDataType b = x(q1);
+		filterDataType c = x(q2);
+		filterDataType d = x(q3);
+
+		Pi<<-b,-c,-d,a,-d,c,d,a,-b,-c,b,a;
+
+		Vector4f s = 2*Pi*p;
+		Matrix<filterDataType,3,4> ffq;
+		ffq <<  s(1), -s(0),  s(3), -s(2),
+				s(2), -s(3), -s(0),  s(1),
+				s(3),  s(2), -s(1), -s(0);
+
+		return ffq;
 
 	}
 

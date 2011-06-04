@@ -1,5 +1,8 @@
-1. Restrict the search area to a predifed number of pixels
-2. Affine transformation of patches as the camera moves 
-3. (Wishful) structure for all the different settings
-4. Move Patches into its own class so that functions like transformation can be called on each
+1.x Restrict the search area to a predifed number of pixels
+2.x Affine transformation of patches as the camera moves 
+3.x (Wishful) structure for all the different settings
+4.x Move Patches into its own class so that functions like transformation can be called on each
 5. Organize the code into more a logical bunch .. so tat data sharing is easy
+
+Depth into data association. Is the depth correctly being assigned? because each time the depth is assigned with what is meassured .. but to take
+it into the real world, we do use R,t form the filter .. so it should be okay.

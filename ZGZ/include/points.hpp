@@ -14,15 +14,15 @@
 using namespace Eigen;
 using namespace std;
 
-#define dataType double
+#define filterDataType double
 
-#define Vector3t Matrix<dataType,3,1>
+#define Vector3t Matrix<filterDataType,3,1>
 
 struct PerPointCameraList
 {
 	int cameraID;
-	dataType u;
-	dataType v;
+	filterDataType u;
+	filterDataType v;
 };
 
 
@@ -52,12 +52,12 @@ private:
 public:
 	int ID;
 	Vector3t t;
-	Quaternion<dataType> q;
-	dataType fu;
-	dataType fv;
-	dataType k1;
-	dataType k2;
-	Kamera(int id, Vector3t in, Quaternion<dataType> qIn, dataType fui, dataType fvi, dataType k1i, dataType k2i)
+	Quaternion<filterDataType> q;
+	filterDataType fu;
+	filterDataType fv;
+	filterDataType k1;
+	filterDataType k2;
+	Kamera(int id, Vector3t in, Quaternion<filterDataType> qIn, filterDataType fui, filterDataType fvi, filterDataType k1i, filterDataType k2i)
 	{
 		ID 	= id;
 		t 	= in;
